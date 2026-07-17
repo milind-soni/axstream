@@ -29,7 +29,9 @@ class Computer:
         self._lock = asyncio.Lock()
 
     async def connect(self) -> None:
-        self._ws = await websockets.connect(self.uri, max_size=None)
+        # ping_interval=None: local socket; keepalive pings just get killed (1011)
+        # when heavy STT work starves the event loop.
+        self._ws = await websockets.connect(self.uri, max_size=None, ping_interval=None)
 
     async def close(self) -> None:
         if self._ws:

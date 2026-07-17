@@ -125,6 +125,7 @@ class Bridge:
             audio = self._buffer_audio()
             if audio is None or len(audio) < SAMPLE_RATE // 4:
                 continue
+            audio = audio[-SAMPLE_RATE * 10 :]  # cap partial cost on long holds
             try:
                 text = await self._transcribe(audio)
             except Exception:  # noqa: BLE001 - partials are best-effort
@@ -243,7 +244,7 @@ async def main() -> None:
     print("loading STT + connecting to computer-server...")
     await bridge.prepare()
     print(f"bridge ready on ws://localhost:8790  (model {model})")
-    async with websockets.serve(bridge.handle, "localhost", 8790):
+    async with websockets.serve(bridge.handle, "localhost", 8790, ping_interval=None):
         await asyncio.Future()
 
 
