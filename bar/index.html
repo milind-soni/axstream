@@ -98,6 +98,11 @@
       case "partial":
         text.className = "partial"; text.textContent = msg.text;
         break;
+      case "eager_start":
+        text.className = ""; text.textContent = msg.text;
+        chips.innerHTML = ""; setState("thinking");
+        hint.textContent = "acting as you speak";
+        break;
       case "transcript":
         text.className = ""; text.textContent = msg.text || "(heard nothing)";
         if (msg.text) setState("thinking");

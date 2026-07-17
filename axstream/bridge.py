@@ -32,6 +32,11 @@ from .voice import SAMPLE_RATE, load_transcriber
 PARTIAL_INTERVAL = 0.6  # seconds between live re-transcriptions while speaking
 
 
+def _norm(text: str) -> str:
+    """Compare transcripts ignoring case, punctuation, and spacing."""
+    return "".join(c.lower() for c in text if c.isalnum())
+
+
 def load_env_keys() -> None:
     env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
     if os.path.exists(env_path):
@@ -54,6 +59,7 @@ class Bridge:
         self._stream = None
         self._partial_task: Optional[asyncio.Task] = None
         self._run_task: Optional[asyncio.Task] = None
+        self._spoken_text = ""  # transcript continuous mode is already acting on
         # Parakeet/MLX is not safe under concurrent transcribe calls: the live
         # partial loop and the final key-release transcribe must serialize.
         self._stt_lock = asyncio.Lock()
@@ -111,6 +117,7 @@ class Bridge:
 
     async def _partial_loop(self, send) -> None:
         last = ""
+        stable_count = 0
         while True:
             await asyncio.sleep(PARTIAL_INTERVAL)
             if self._stt_lock.locked():
@@ -122,9 +129,27 @@ class Bridge:
                 text = await self._transcribe(audio)
             except Exception:  # noqa: BLE001 - partials are best-effort
                 continue
-            if text and text != last:
+            if not text:
+                continue
+            if text != last:
                 last = text
+                stable_count = 0
                 await send({"type": "partial", "text": text})
+                continue
+            # Continuous mode: the transcript stopped changing while the user
+            # is still holding the key -- start acting on it now. stop_listen
+            # reconciles with the final transcript (cancel + rerun if it grew).
+            stable_count += 1
+            if (
+                stable_count == 2
+                and len(text.split()) >= 3
+                and _norm(text) != _norm(self._spoken_text)
+            ):
+                self._spoken_text = text
+                await send({"type": "eager_start", "text": text})
+                if self._run_task and not self._run_task.done():
+                    self._run_task.cancel()
+                self._run_task = asyncio.create_task(self._run(text, send))
 
     # -- session ------------------------------------------------------------
 
@@ -144,6 +169,7 @@ class Bridge:
             kind = msg.get("type")
 
             if kind == "start_listen" and self._stream is None:
+                self._spoken_text = ""
                 self._start_recording()
                 self._partial_task = asyncio.create_task(self._partial_loop(send))
                 await send({"type": "listening"})
@@ -157,7 +183,9 @@ class Bridge:
                 text = await self._transcribe(audio)
                 stt_ms = (time.perf_counter() - t0) * 1000
                 await send({"type": "transcript", "text": text, "stt_ms": stt_ms})
-                if text:
+                if text and _norm(text) == _norm(self._spoken_text):
+                    pass  # continuous mode already acting on exactly this command
+                elif text:
                     # latest voice command wins: cancel any running task
                     if self._run_task and not self._run_task.done():
                         self._run_task.cancel()

@@ -80,6 +80,10 @@ class Executor:
                         await queue.put(event)
                 for event in compiler.finish():
                     await queue.put(event)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001 - surface stream errors to the burst
+                await queue.put(("stream_error", str(e)))
             finally:
                 result.stream_ended_at = self._now()
                 await queue.put(None)
@@ -108,6 +112,11 @@ class Executor:
         if kind == "invalid":
             self._emit(result, "invalid_line", line=event[1], error=event[2])
             return False
+        if kind == "stream_error":
+            self._emit(result, "stream_error", error=event[1])
+            result.status = "aborted"
+            result.reason = f"llm stream failed: {event[1][:200]}"
+            return True
 
         op = event[1]
         if op["op"] == "observe":

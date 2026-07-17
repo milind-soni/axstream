@@ -78,3 +78,11 @@ def test_unfenced_mode():
     compiler = StreamCompiler(fenced=False)
     events = collect(compiler, ['{"op":"done","status":"success"}\n'])
     assert len(actions(events)) == 1
+
+
+def test_any_fence_tag_accepted():
+    for tag in ("```spec", "```jsonl", "```json", "```"):
+        compiler = StreamCompiler()
+        text = f'thinking...\n{tag}\n{{"op":"done","status":"success"}}\n```\n'
+        acts = actions(collect(compiler, [text]))
+        assert len(acts) == 1, f"fence tag {tag}"

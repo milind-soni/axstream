@@ -7,8 +7,10 @@ works through stream_openai_compat; Anthropic through stream_anthropic.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import re
 from typing import AsyncIterator, Optional
 
 import httpx
@@ -73,24 +75,45 @@ async def stream_openai_compat(
     }
     headers = {"Authorization": f"Bearer {api_key}", "content-type": "application/json"}
     async with httpx.AsyncClient(timeout=120) as client:
-        async with client.stream(
-            "POST", f"{base_url}/chat/completions", json=payload, headers=headers
-        ) as resp:
-            if resp.status_code != 200:
-                body = await resp.aread()
-                raise RuntimeError(f"llm {resp.status_code}: {body.decode()[:500]}")
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
+        for attempt in range(4):
+            async with client.stream(
+                "POST", f"{base_url}/chat/completions", json=payload, headers=headers
+            ) as resp:
+                if resp.status_code == 429 and attempt < 3:
+                    body = (await resp.aread()).decode()
+                    delay = _retry_after_seconds(resp, body)
+                    await asyncio.sleep(delay)
                     continue
-                data_str = line[5:].strip()
-                if data_str == "[DONE]":
-                    break
-                data = json.loads(data_str)
-                choices = data.get("choices") or []
-                if choices:
-                    content = choices[0].get("delta", {}).get("content")
-                    if content:
-                        yield content
+                if resp.status_code != 200:
+                    body = await resp.aread()
+                    raise RuntimeError(f"llm {resp.status_code}: {body.decode()[:500]}")
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    data = json.loads(data_str)
+                    choices = data.get("choices") or []
+                    if choices:
+                        content = choices[0].get("delta", {}).get("content")
+                        if content:
+                            yield content
+                return
+
+
+def _retry_after_seconds(resp, body: str) -> float:
+    """429 backoff: honor Retry-After, else the 'try again in Xs' hint, else 2s."""
+    if resp.headers.get("retry-after"):
+        try:
+            return min(float(resp.headers["retry-after"]) + 0.2, 15.0)
+        except ValueError:
+            pass
+    m = re.search(r"try again in ([\d.]+)(m?s)", body)
+    if m:
+        seconds = float(m.group(1)) / (1000 if m.group(2) == "ms" else 1)
+        return min(seconds + 0.2, 15.0)
+    return 2.0
 
 
 async def replay_stream(text: str, tokens_per_second: float = 40.0) -> AsyncIterator[str]:

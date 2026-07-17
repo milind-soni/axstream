@@ -19,7 +19,6 @@ from typing import Iterator
 
 from .spec import validate_op
 
-FENCE_OPEN = "```spec"
 FENCE_CLOSE = "```"
 
 Event = tuple  # ("action", dict) | ("text", str) | ("invalid", str, str)
@@ -49,7 +48,9 @@ class StreamCompiler:
         if not stripped:
             return
         if self._fenced:
-            if stripped.startswith(FENCE_OPEN):
+            # be liberal in what we accept: models label the fence ```spec,
+            # ```jsonl, ```json, or nothing at all
+            if not self._in_fence and stripped.startswith("```"):
                 self._in_fence = True
                 return
             if stripped == FENCE_CLOSE and self._in_fence:

@@ -44,6 +44,19 @@ RULES
 5. Split long text into multiple {"do":"type"} lines of at most ~60 characters
    so typing starts before you finish generating.
 6. If the task is already complete, emit done immediately.
+7. No prose. Open the fence as your first output and keep thinking to a minimum.
+
+EXAMPLE (task: "open Notes and write hi")
+```spec
+{"op":"act","do":"click","target":{"ax":{"id":"e19"}}}
+{"op":"observe"}
+```
+...new observation shows the Notes window...
+```spec
+{"op":"act","do":"key","keys":["cmd","n"]}
+{"op":"act","do":"type","text":"hi"}
+{"op":"done","status":"success"}
+```
 """
 
 
