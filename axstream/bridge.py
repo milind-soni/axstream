@@ -53,7 +53,14 @@ class Bridge:
         self._chunks: list = []
         self._stream = None
         self._partial_task: Optional[asyncio.Task] = None
-        self._busy = False
+        self._run_task: Optional[asyncio.Task] = None
+        # Parakeet/MLX is not safe under concurrent transcribe calls: the live
+        # partial loop and the final key-release transcribe must serialize.
+        self._stt_lock = asyncio.Lock()
+
+    async def _transcribe(self, audio) -> str:
+        async with self._stt_lock:
+            return await asyncio.to_thread(self.transcriber.transcribe, audio)
 
     def stream_factory(self, system: str, user: str):
         extra = {"reasoning_effort": "low"} if "gpt-oss" in self.model else None
@@ -106,11 +113,13 @@ class Bridge:
         last = ""
         while True:
             await asyncio.sleep(PARTIAL_INTERVAL)
+            if self._stt_lock.locked():
+                continue  # don't queue up behind an in-flight transcribe
             audio = self._buffer_audio()
             if audio is None or len(audio) < SAMPLE_RATE // 4:
                 continue
             try:
-                text = await asyncio.to_thread(self.transcriber.transcribe, audio)
+                text = await self._transcribe(audio)
             except Exception:  # noqa: BLE001 - partials are best-effort
                 continue
             if text and text != last:
@@ -145,11 +154,15 @@ class Bridge:
                     self._partial_task = None
                 audio = self._stop_recording()
                 t0 = time.perf_counter()
-                text = await asyncio.to_thread(self.transcriber.transcribe, audio)
+                text = await self._transcribe(audio)
                 stt_ms = (time.perf_counter() - t0) * 1000
                 await send({"type": "transcript", "text": text, "stt_ms": stt_ms})
-                if text and not self._busy:
-                    asyncio.create_task(self._run(text, send))
+                if text:
+                    # latest voice command wins: cancel any running task
+                    if self._run_task and not self._run_task.done():
+                        self._run_task.cancel()
+                        await send({"type": "event", "kind": "interrupted"})
+                    self._run_task = asyncio.create_task(self._run(text, send))
 
             elif kind == "cancel":
                 if self._partial_task:
@@ -159,7 +172,6 @@ class Bridge:
                     self._stop_recording()
 
     async def _run(self, task: str, send) -> None:
-        self._busy = True
         t0 = time.perf_counter()
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue = asyncio.Queue()
@@ -176,16 +188,20 @@ class Bridge:
 
         forwarder = asyncio.create_task(forward())
         try:
-            await run_task(
-                self.computer, task, self.stream_factory,
-                max_bursts=6, verbose=True, on_event=on_event,
+            await asyncio.wait_for(
+                run_task(
+                    self.computer, task, self.stream_factory,
+                    max_bursts=6, verbose=True, on_event=on_event,
+                ),
+                timeout=90,
             )
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass  # interrupted by a newer command, or wedged: either way move on
         except Exception as e:  # noqa: BLE001 - surface to the UI
             await send({"type": "error", "message": str(e)})
         finally:
             queue.put_nowait(None)
             await forwarder
-            self._busy = False
             await send({"type": "task_done", "seconds": time.perf_counter() - t0})
 
 
