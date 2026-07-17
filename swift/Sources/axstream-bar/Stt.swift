@@ -1,63 +1,103 @@
-// Local speech-to-text via FluidAudio's Parakeet (CoreML / Neural Engine).
-// Follows the same flow as BlueyLite's ParakeetTranscriptionBackend:
-// AsrModels.downloadAndLoad -> AsrManager.loadModels -> transcribe.
+// Local speech-to-text via FluidAudio's Parakeet realtime EOU model
+// (parakeet-realtime-eou-120m, CoreML / Neural Engine) in TRUE streaming mode:
+// StreamingEouAsrManager keeps encoder caches across 320ms chunks, decodes
+// incrementally, emits partial transcripts as tokens land, and raises an
+// in-band end-of-utterance signal after `eouDebounceMs` of sustained silence.
 //
-// Parakeet is NOT safe under concurrent transcribe calls, so every call is
-// chained behind the previous one (hard FIFO serialization -- an actor alone
-// is not enough because actor methods interleave at suspension points).
-// The partial loop additionally checks `inFlight` and skips a cycle instead
-// of queueing up behind a slow transcribe, mirroring bridge.py.
+// Concurrency contract: StreamingEouAsrManager is an actor, but audio chunks
+// must arrive in order. The mic tap yields into an AsyncStream and a single
+// pump task consumes it, so `process` calls are strictly FIFO. Consecutive
+// utterances are chained (`chain`) so a new hold can never interleave with the
+// previous hold's drain/finish.
 
+import AVFoundation
 import FluidAudio
 import Foundation
 
 actor Stt {
-    private var manager: AsrManager?
-    private var chain: Task<String, Error>?
-    private(set) var inFlight = 0
+    /// Sustained-silence window before the model's EOU prediction is confirmed.
+    /// Low on purpose (default is 1280ms): with 320ms chunks the callback fires
+    /// on the first silent chunk after the debounce window elapses.
+    static let eouDebounceMs = 300
+
+    private var manager: StreamingEouAsrManager?
+    private var feed: AsyncStream<[Float]>.Continuation?
+    private var chain: Task<String, Never>?
 
     var isReady: Bool { manager != nil }
 
-    /// Download + load the Parakeet models once, then burn the first-call
-    /// compile with a short silent buffer.
+    /// Download + load the Parakeet EOU streaming models once, then burn the
+    /// first-call CoreML compile with a short silent stream.
     func prepare(onProgress: @escaping @Sendable (String) -> Void) async throws {
         guard manager == nil else { return }
         onProgress("downloading STT model…")
-        let models = try await AsrModels.downloadAndLoad(version: .v3) { progress in
+        let asr = StreamingEouAsrManager(chunkSize: .ms320, eouDebounceMs: Self.eouDebounceMs)
+        try await asr.loadModels(to: nil, configuration: nil) { progress in
             let pct = Int(progress.fractionCompleted * 100)
             onProgress("downloading STT model… \(pct)%")
         }
-        onProgress("loading STT model…")
-        let asr = AsrManager(config: .default)
-        try await asr.loadModels(models)
-        manager = asr
         onProgress("warming STT…")
-        _ = try? await run(samples: [Float](repeating: 0, count: 8000))
+        _ = try? await asr.process(audioBuffer: Self.pcmBuffer(from: [Float](repeating: 0, count: 16_000)))
+        _ = try? await asr.finish()
+        await asr.reset()
+        manager = asr
     }
 
-    /// Transcribe 16 kHz mono Float32 samples. Serialized: begins only after
-    /// every previously requested transcription has finished.
-    func transcribe(_ samples: [Float]) async throws -> String {
+    /// Start a fresh streaming utterance. Returns a thread-safe sink for
+    /// converted 16 kHz mono chunks (call it straight from the mic tap).
+    /// `onPartial` fires whenever new tokens are decoded (~every 320ms chunk
+    /// that contains speech); `onEou` fires once per utterance when the model
+    /// signals end-of-utterance and the debounce window has elapsed.
+    func beginUtterance(
+        onPartial: @escaping @Sendable (String) -> Void,
+        onEou: @escaping @Sendable (String) -> Void
+    ) -> @Sendable ([Float]) -> Void {
+        feed?.finish()  // orphan any stale feed (missed talkStop)
+        let (stream, continuation) = AsyncStream<[Float]>.makeStream()
+        feed = continuation
+
         let previous = chain
-        let task = Task { () throws -> String in
-            _ = try? await previous?.value  // wait out the prior call, success or not
-            return try await self.run(samples: samples)
+        let manager = manager
+        chain = Task { () -> String in
+            _ = await previous?.value  // wait out the prior utterance, fully drained
+            guard let manager else { return "" }
+            await manager.reset()  // fresh caches + decoder state + EOU latch per hold
+            await manager.setPartialCallback(onPartial)
+            await manager.setEouCallback(onEou)
+            for await chunk in stream {
+                _ = try? await manager.process(audioBuffer: Self.pcmBuffer(from: chunk))
+            }
+            // Feed closed (key released): pad + decode the tail, take the final text.
+            let text = (try? await manager.finish()) ?? ""
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        chain = task
-        inFlight += 1
-        defer { inFlight -= 1 }
-        return try await task.value
+        return { continuation.yield($0) }
     }
 
-    private func run(samples: [Float]) async throws -> String {
-        guard let manager else {
-            throw NSError(domain: "Stt", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "STT not loaded yet",
-            ])
+    /// Close the feed, drain remaining audio through the decoder, and return
+    /// the final transcript for the utterance.
+    func finishUtterance() async -> String {
+        feed?.finish()
+        feed = nil
+        return await chain?.value ?? ""
+    }
+
+    /// Wrap converted samples in the 16 kHz mono Float32 buffer the manager
+    /// expects (its AudioConverter fast-paths this format untouched).
+    private static func pcmBuffer(from samples: [Float]) -> AVAudioPCMBuffer {
+        let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32, sampleRate: sttSampleRate,
+            channels: 1, interleaved: false
+        )!
+        let buffer = AVAudioPCMBuffer(
+            pcmFormat: format, frameCapacity: AVAudioFrameCount(max(samples.count, 1))
+        )!
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        if let channel = buffer.floatChannelData, !samples.isEmpty {
+            samples.withUnsafeBufferPointer { source in
+                channel[0].update(from: source.baseAddress!, count: samples.count)
+            }
         }
-        // each hold is a self-contained utterance: fresh decoder state per call
-        var decoderState = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
-        let result = try await manager.transcribe(samples, decoderState: &decoderState)
-        return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return buffer
     }
 }

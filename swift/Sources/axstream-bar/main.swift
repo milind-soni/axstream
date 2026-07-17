@@ -1,7 +1,8 @@
 // axstream-bar: voice-driven computer use in a single process.
-// Hold ⌃⌥ to speak; Parakeet transcribes live; a stable partial transcript
-// starts acting mid-speech; Groq streams JSONL actions that execute through
-// cua-driver as the lines complete. Port of axstream's Python pipeline.
+// Hold ⌃⌥ to speak; Parakeet streams the transcript live (partial callbacks
+// per 320ms chunk); an in-band end-of-utterance signal starts acting
+// mid-speech; Groq streams JSONL actions that execute through cua-driver as
+// the lines complete. Port of axstream's Python pipeline.
 
 import AppKit
 import Foundation
@@ -20,14 +21,13 @@ final class VoiceSession {
     private let stt = Stt()
     private let mic = Mic()
 
-    private var partialTask: Task<Void, Never>?
     private var runTask: Task<Void, Never>?
     private var runGeneration = 0
+    private var utteranceGeneration = 0  // guards stale partial/EOU callbacks
     private var spokenText = ""  // transcript continuous mode is already acting on
     private var recording = false
     private var ready = false
 
-    private static let partialInterval: UInt64 = 600_000_000  // 600ms
     private static let taskTimeout: TimeInterval = 90
 
     init(bar: Bar) {
@@ -62,30 +62,45 @@ final class VoiceSession {
         }
         recording = true
         spokenText = ""
+        utteranceGeneration += 1
+        let generation = utteranceGeneration
         bar.setStatus(.listening)
         bar.setTranscript("listening…", partial: true)
-        partialTask = Task { [weak self] in await self?.partialLoop() }
+
+        // Open the streaming utterance and wire the mic tap straight into it.
+        // Chunks captured before the sink lands are flushed by Mic.setSink.
+        Task { [weak self] in
+            guard let self else { return }
+            let sink = await self.stt.beginUtterance(
+                onPartial: { text in
+                    Task { @MainActor in self.handlePartial(text, generation: generation) }
+                },
+                onEou: { text in
+                    Task { @MainActor in self.handleEou(text, generation: generation) }
+                }
+            )
+            self.mic.setSink(sink)
+        }
     }
 
     func talkStop() {
         guard recording else { return }
         recording = false
-        partialTask?.cancel()
-        partialTask = nil
-        let audio = mic.stop()
+        _ = mic.stop()
         bar.setStatus(.thinking)
 
         Task { [weak self] in
             guard let self else { return }
             let t0 = Date()
-            let text = (try? await self.stt.transcribe(audio)) ?? ""
+            // Close the feed, drain the decoder, take the final transcript.
+            let text = await self.stt.finishUtterance()
             let sttMs = Date().timeIntervalSince(t0) * 1000
             self.bar.setTranscript(text.isEmpty ? "(heard nothing)" : text, partial: false)
-            self.bar.setTiming(String(format: "stt %.0fms", sttMs))
+            self.bar.setTiming(String(format: "stt flush %.0fms", sttMs))
 
             if !text.isEmpty,
                normalizedTranscript(text) == normalizedTranscript(self.spokenText) {
-                // continuous mode already acting on exactly this command
+                // eager start (EOU) already acting on exactly this command
             } else if !text.isEmpty {
                 // latest voice command wins: cancel any running task
                 self.startRun(text)
@@ -95,38 +110,25 @@ final class VoiceSession {
         }
     }
 
-    /// 600ms live re-transcription loop with the stability rule from
-    /// bridge.py: same partial twice in a row + >=3 words -> eager start.
-    private func partialLoop() async {
-        var last = ""
-        var stableCount = 0
-        while !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: Self.partialInterval)
-            if Task.isCancelled { return }
-            if await stt.inFlight > 0 { continue }  // never queue behind an in-flight transcribe
-            var audio = mic.snapshot()
-            if audio.count < Int(sttSampleRate) / 4 { continue }
-            audio = Array(audio.suffix(Int(sttSampleRate) * 10))  // cap partial cost on long holds
-            guard let text = try? await stt.transcribe(audio), !text.isEmpty else { continue }
-            if Task.isCancelled { return }
-            if text != last {
-                last = text
-                stableCount = 0
-                bar.setTranscript(text, partial: true)
-                continue
-            }
-            // The transcript stopped changing while the user is still holding
-            // the key -- start acting on it now. talkStop reconciles with the
-            // final transcript (continue if equal, cancel + rerun if it grew).
-            stableCount += 1
-            if stableCount == 2,
-               text.split(whereSeparator: { $0.isWhitespace }).count >= 3,
-               normalizedTranscript(text) != normalizedTranscript(spokenText) {
-                spokenText = text
-                bar.setTranscript(text + " ⚡", partial: true)
-                startRun(text)
-            }
-        }
+    /// Streaming partial (new tokens decoded): live-update the bar.
+    private func handlePartial(_ text: String, generation: Int) {
+        guard generation == utteranceGeneration, recording, !text.isEmpty else { return }
+        bar.setTranscript(text, partial: true)
+    }
+
+    /// In-band end-of-utterance while the user is still holding the key:
+    /// the model says the command is complete, so start acting on it now.
+    /// talkStop reconciles with the final transcript (continue if equal,
+    /// cancel + rerun if the user kept talking).
+    private func handleEou(_ text: String, generation: Int) {
+        guard generation == utteranceGeneration, recording else { return }
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.split(whereSeparator: { $0.isWhitespace }).count >= 3,
+              normalizedTranscript(text) != normalizedTranscript(spokenText)
+        else { return }
+        spokenText = text
+        bar.setTranscript(text + " ⚡", partial: true)
+        startRun(text)
     }
 
     // MARK: task running

@@ -5,9 +5,9 @@ let package = Package(
     name: "axstream-bar",
     platforms: [.macOS(.v14)],
     dependencies: [
-        // Same revision BlueyLite pins — known to build + run on this machine.
+        // 0.15.x for the streaming ASR API (StreamingEouAsrManager).
         .package(url: "https://github.com/FluidInference/FluidAudio.git",
-                 revision: "fe1686fe79401cb6aec08991a320b82e3a66bb7a"),
+                 from: "0.15.5"),
     ],
     targets: [
         .executableTarget(

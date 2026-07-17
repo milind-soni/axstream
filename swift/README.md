@@ -16,9 +16,9 @@ swift run axstream-bar
 Run it **from a terminal that already has Accessibility permission** (the
 global ⌃⌥ hotkey monitor inherits the terminal's grant). The first time you
 hold ⌃⌥ macOS will prompt for **Microphone** access — grant it to the
-terminal. On first launch the Parakeet v3 model is downloaded (~600MB,
-progress shown in the bar), then warmed; the bar says "hold ⌃⌥ and speak"
-when ready.
+terminal. On first launch the Parakeet realtime-EOU streaming model is
+downloaded (progress shown in the bar), then warmed; the bar says
+"hold ⌃⌥ and speak" when ready.
 
 Requirements already on this machine:
 
@@ -28,19 +28,20 @@ Requirements already on this machine:
   `AXSTREAM_MODEL` overrides the default `qwen/qwen3.6-27b`.
 
 Usage: hold ⌃⌥, speak a command ("open Notes and write hello"), release.
-If your transcript stabilizes mid-hold (same partial twice + ≥3 words) the
-task starts **while you are still speaking**; releasing reconciles — if the
-final transcript matches, the run continues, if it grew, the old run is
-cancelled and a new one starts. Speaking a new command always cancels the
-running one (latest-command-wins).
+The transcript streams live as you speak. If the model detects
+end-of-utterance mid-hold (~300ms of sustained silence, ≥3 words) the task
+starts **while you are still holding**; releasing reconciles — if the final
+transcript matches, the run continues, if it grew, the old run is cancelled
+and a new one starts. Speaking a new command always cancels the running one
+(latest-command-wins).
 
 ## Files
 
-- `Package.swift` — SPM executable, macOS 14+, depends on FluidAudio
-  (pinned to the same revision BlueyLite uses, known-good on this machine).
+- `Package.swift` — SPM executable, macOS 14+, depends on FluidAudio 0.15.5+
+  (for the streaming ASR API).
 - `Sources/axstream-bar/main.swift` — app bootstrap (accessory NSApplication)
   plus `VoiceSession`, the port of `bridge.py`: push-to-talk state machine,
-  600ms partial loop with stability-triggered eager execution, release-time
+  streaming partial callbacks, EOU-triggered eager execution, release-time
   reconciliation, latest-command-wins cancellation, 90s task timeout.
 - `Bar.swift` — frameless non-activating NSPanel (640×64, bottom-center,
   `.screenSaver` level, all Spaces): status dot (gray idle / red listening /
@@ -49,10 +50,16 @@ running one (latest-command-wins).
 - `Hotkey.swift` — global+local `flagsChanged` monitors; both ⌃ and ⌥ held →
   talk-start, either released → talk-stop.
 - `Mic.swift` — AVAudioEngine input tap → AVAudioConverter → 16kHz mono
-  Float32 accumulator with thread-safe snapshots for the partial loop.
-- `Stt.swift` — FluidAudio Parakeet v3 (`AsrModels.downloadAndLoad` →
-  `AsrManager`), hard-FIFO serialization of transcribe calls (the model is
-  not concurrency-safe), fresh `TdtDecoderState` per utterance.
+  Float32 chunks pushed straight into the streaming STT sink as they arrive
+  (raw samples also accumulated per hold for future logging).
+- `Stt.swift` — TRUE streaming STT via FluidAudio's `StreamingEouAsrManager`
+  (`parakeet-realtime-eou-120m` CoreML, 320ms chunks, cache-aware
+  incremental decode). Partial transcripts arrive via callback as tokens
+  land; the model emits an in-band end-of-utterance signal debounced to
+  ~300ms of sustained silence (vs the 1280ms default), which drives eager
+  task start. Mic chunks flow through an AsyncStream consumed by a single
+  pump task, so `process` calls stay strictly FIFO; consecutive utterances
+  are chained so a new hold never interleaves with the previous drain.
 - `Llm.swift` — raw SSE streaming (no SDK) against Groq's OpenAI-compatible
   `/chat/completions`, `stream:true`, 429 retry honoring Retry-After /
   "try again in Xs|Xms" (≤3 retries); Anthropic `/v1/messages` fallback;
