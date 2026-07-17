@@ -58,6 +58,10 @@ def _parse_point(s: Any) -> Optional[tuple[float, float]]:
 
 
 def _center(el: dict) -> Optional[tuple[float, float]]:
+    # menubar/dock items carry a bounds dict instead of UIElement position strings
+    bounds = el.get("bounds")
+    if isinstance(bounds, dict) and "x" in bounds:
+        return bounds["x"] + bounds.get("width", 0) / 2, bounds["y"] + bounds.get("height", 0) / 2
     pos = _parse_point(el.get("absolute_position"))
     size = _parse_point(el.get("size"))
     if pos is None:
@@ -84,9 +88,28 @@ class Snapshot:
             for child in win.get("children", []):
                 self._walk(child, win_title)
         for item in desktop_state.get("menubar_items", []):
-            self._walk(item, "menubar")
+            self._add_flat(item, "AXMenuBarItem", "menubar")
         for item in desktop_state.get("dock_items", []):
-            self._walk(item, "dock")
+            self._add_flat(item, "AXDockItem", "dock")
+
+    def _add_flat(self, item: Any, default_role: str, window: str) -> None:
+        """Menubar/dock items: flat dicts with title + bounds, no children."""
+        if not isinstance(item, dict):
+            return
+        center = _center(item)
+        if center is None:
+            return
+        ax_el = AxElement(
+            id=f"e{len(self.elements)}",
+            role=item.get("role") or default_role,
+            title=_text(item.get("title")),
+            description=_text(item.get("description")),
+            value="",
+            center=center,
+            window=window,
+        )
+        self.elements.append(ax_el)
+        self._by_id[ax_el.id] = ax_el
 
     def _walk(self, el: Any, window: str) -> None:
         if not isinstance(el, dict):

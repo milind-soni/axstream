@@ -45,6 +45,10 @@ def validate_op(obj: Any) -> tuple[bool, str]:
     """Cheap structural validation of a parsed line. Returns (ok, error)."""
     if not isinstance(obj, dict):
         return False, "not an object"
+    # models naturally shorten {"op":"act","do":X,...} to {"op":X,...}; accept it
+    if obj.get("op") in ACTIONS and "do" not in obj:
+        obj["do"] = obj["op"]
+        obj["op"] = "act"
     op = obj.get("op")
     if op not in OPS:
         return False, f"unknown op: {op!r}"

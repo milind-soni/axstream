@@ -137,6 +137,14 @@ class Executor:
             result.reason = "risky action blocked by policy"
             return True
 
+        # resolve ax targets up front so telemetry/history record what was hit
+        resolved = None
+        target = op.get("target")
+        if isinstance(target, dict) and "ax" in target:
+            resolved = self.snapshot.resolve_element(target["ax"])
+            if resolved is not None:
+                op = {**op, "resolved": f"{resolved.role} {resolved.title!r}"}
+
         t_start = self._now()
         try:
             await self._execute(op)

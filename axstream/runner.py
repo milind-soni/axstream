@@ -67,7 +67,7 @@ def _op_str(op: dict) -> str:
     do = op.get("do", op.get("op"))
     target = op.get("target")
     if isinstance(target, dict) and "ax" in target:
-        target = target["ax"].get("title") or target["ax"].get("id")
+        target = op.get("resolved") or target["ax"].get("title") or target["ax"].get("id")
     detail = target or op.get("text") or op.get("keys") or ""
     return f"{do} {detail}".strip()
 

@@ -36,16 +36,16 @@ class Computer:
             await self._ws.close()
             self._ws = None
 
-    async def command(self, command: str, **params: Any) -> dict:
+    async def command(self, name: str, /, **params: Any) -> dict:
         if self._ws is None:
             await self.connect()
         assert self._ws is not None
         async with self._lock:
-            await self._ws.send(json.dumps({"command": command, "params": params}))
+            await self._ws.send(json.dumps({"command": name, "params": params}))
             raw = await asyncio.wait_for(self._ws.recv(), timeout=30)
         result = json.loads(raw)
         if not result.get("success", True):
-            raise ComputerError(f"{command}: {result.get('error', 'unknown error')}")
+            raise ComputerError(f"{name}: {result.get('error', 'unknown error')}")
         return result
 
     # -- actions used by the executor ------------------------------------
@@ -76,8 +76,12 @@ class Computer:
         arg = f"-a '{target}'" if not ("://" in target or "/" in target or "." in target) else f"'{target}'"
         await self.command("run_command", command=f"open {arg}")
 
-    async def ax_tree(self) -> dict:
-        return await self.command("get_accessibility_tree")
+    async def ax_tree(self, frontmost_only: bool = True, max_depth: int = 20) -> dict:
+        # Scoped walk (requires the axstream patch to cua's macOS handler);
+        # unpatched servers ignore the params and fall back to the full walk.
+        return await self.command(
+            "get_accessibility_tree", frontmost_only=frontmost_only, max_depth=max_depth
+        )
 
     async def screenshot(self) -> dict:
         return await self.command("screenshot")
@@ -99,12 +103,12 @@ class MockComputer(Computer):
     async def connect(self) -> None:  # pragma: no cover - nothing to connect
         pass
 
-    async def command(self, command: str, **params: Any) -> dict:
+    async def command(self, name: str, /, **params: Any) -> dict:
         latency = self.latency
-        if command == "type_text":
+        if name == "type_text":
             latency += 0.03 * len(params.get("text", ""))  # ~real keystroke pacing
         await asyncio.sleep(latency)
-        self.log.append((time.perf_counter(), command, params))
-        if command == "get_accessibility_tree":
+        self.log.append((time.perf_counter(), name, params))
+        if name == "get_accessibility_tree":
             return {"success": True, **self.ax_fixture}
         return {"success": True}
