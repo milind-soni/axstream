@@ -39,7 +39,7 @@ async def main() -> None:
             return stream_anthropic(system, user, model=model)
     elif args.provider == "groq":
         model = args.model or "qwen/qwen3.6-27b"
-        extra = {"reasoning_effort": "low"} if "gpt-oss" in model else None
+        extra = {"reasoning_effort": "low" if "gpt-oss" in model else "none"}
 
         def stream_factory(system: str, user: str):
             return stream_openai_compat(

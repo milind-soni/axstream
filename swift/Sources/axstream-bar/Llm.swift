@@ -82,7 +82,7 @@ enum Llm {
         system: String, user: String, apiKey: String, baseURL: String, model: String,
         onDelta: (String) -> Void
     ) async throws {
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "model": model,
             "max_tokens": 2048,
             "messages": [
@@ -91,6 +91,9 @@ enum Llm {
             ],
             "stream": true,
         ]
+        // qwen thinks for 0.3-2s before the fence; our plans don't need it.
+        // gpt-oss requires at least low effort.
+        payload["reasoning_effort"] = model.contains("gpt-oss") ? "low" : "none"
         var request = URLRequest(url: URL(string: "\(baseURL)/chat/completions")!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")

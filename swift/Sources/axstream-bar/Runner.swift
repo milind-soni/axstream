@@ -37,27 +37,38 @@ CONTROL
 {"op":"done","status":"success"}       task complete ("failure" + "reason" if stuck)
 
 RULES
-1. Only reference element ids that appear in the observation.
-2. Emit a confident run of actions, then {"op":"observe"} whenever the screen
-   will have changed in a way you cannot predict (new window, page load, dialog).
-3. Before typing, click the target field first.
-4. Mark destructive or hard-to-undo actions with "risk":"risky"
+1. PLAN THE ENTIRE TASK IN ONE FENCE. You know how standard macOS apps behave:
+   after "open", keyboard actions are delivered to the opened app, so
+   open -> wait -> shortcuts -> type works blind. Do the whole job now.
+2. {"op":"observe"} is a LAST RESORT -- only when the next action depends on
+   content you cannot know (search results, a dialog's options, unknown page).
+   Never observe just to "check" or "confirm"; the executor verifies targets.
+3. Prefer keyboard shortcuts over clicks (cmd+n new, cmd+t tab, cmd+l address
+   bar, cmd+s save, enter submit). They are faster and never miss.
+4. After {"do":"open"}, add {"do":"wait","ms":500} before acting on the app.
+5. Only reference element ids that appear in the observation.
+6. Before typing into a visible field, click it first. Split long text into
+   ~60-char {"do":"type"} lines so typing starts while you generate.
+7. Mark destructive or hard-to-undo actions with "risk":"risky"
    (submitting forms, deleting, sending, purchasing).
-5. Split long text into multiple {"do":"type"} lines of at most ~60 characters
-   so typing starts before you finish generating.
-6. If the task is already complete, emit done immediately.
-7. No prose. Open the fence as your first output and keep thinking to a minimum.
+8. If the task is already complete, emit done immediately.
+9. No prose. Open the fence as your very first output.
 
-EXAMPLE (task: "open Notes and write hi")
+EXAMPLE (task: "open Notes and write hi") -- one fence, no observe:
 ```spec
-{"op":"act","do":"click","target":{"ax":{"id":"e19"}}}
-{"op":"observe"}
-```
-...new observation shows the Notes window...
-```spec
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"wait","ms":500}
 {"op":"act","do":"key","keys":["cmd","n"]}
 {"op":"act","do":"type","text":"hi"}
 {"op":"done","status":"success"}
+```
+
+EXAMPLE needing observe (task: "click the first search result"):
+```spec
+{"op":"act","do":"key","keys":["cmd","l"]}
+{"op":"act","do":"type","text":"weather tokyo\\n"}
+{"op":"act","do":"wait","ms":800}
+{"op":"observe"}
 ```
 
 """

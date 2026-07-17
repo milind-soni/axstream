@@ -193,10 +193,15 @@ enum ExecError: Error, CustomStringConvertible {
 final class OpExecutor {
     private let driver: Driver
     private(set) var observation: Observation
+    /// Where keyboard/scroll actions are delivered. Starts at the observed
+    /// frontmost app but follows `open` actions, so a one-burst plan like
+    /// open -> wait -> cmd+n -> type lands in the app it just launched.
+    private var targetPid: Int
 
     init(driver: Driver, observation: Observation) {
         self.driver = driver
         self.observation = observation
+        self.targetPid = observation.frontPid
     }
 
     func execute(_ op: [String: Any]) async throws {
@@ -211,7 +216,7 @@ final class OpExecutor {
         case "type":
             let text = op["text"] as? String ?? ""
             try await driver.callTool("type_text", [
-                "pid": observation.frontPid, "text": text,
+                "pid": targetPid, "text": text,
             ])
 
         case "key":
@@ -221,11 +226,11 @@ final class OpExecutor {
             guard !keys.isEmpty else { throw ExecError.badOp("key with no keys") }
             if keys.count == 1 {
                 try await driver.callTool("press_key", [
-                    "pid": observation.frontPid, "key": keys[0],
+                    "pid": targetPid, "key": keys[0],
                 ])
             } else {
                 try await driver.callTool("hotkey", [
-                    "pid": observation.frontPid, "keys": keys,
+                    "pid": targetPid, "keys": keys,
                 ])
             }
 
@@ -233,7 +238,7 @@ final class OpExecutor {
             let direction = op["direction"] as? String ?? "down"
             let clicks = (op["clicks"] as? NSNumber)?.intValue ?? 1
             try await driver.callTool("scroll", [
-                "pid": observation.frontPid,
+                "pid": targetPid,
                 "direction": direction,
                 "amount": max(1, min(50, clicks)),
             ])
@@ -263,7 +268,9 @@ final class OpExecutor {
         let result = try await driver.callTool("launch_app", args)
         if let pid = (result.structured?["pid"] as? NSNumber)?.intValue {
             _ = try? await driver.callTool("bring_to_front", ["pid": pid])
+            targetPid = pid
         }
+        try await Task.sleep(nanoseconds: 300_000_000)  // app settle
     }
 
     private func pointerAction(_ doName: String, op: [String: Any]) async throws {
@@ -280,7 +287,7 @@ final class OpExecutor {
                 try await driver.callTool("click", ["x": x, "y": y, "scope": "desktop"])
             case "double_click":
                 try await driver.callTool("double_click", [
-                    "pid": observation.frontPid, "x": x, "y": y,
+                    "pid": targetPid, "x": x, "y": y,
                 ])
             case "move":
                 try await driver.callTool("move_cursor", ["x": x, "y": y])

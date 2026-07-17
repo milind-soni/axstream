@@ -69,7 +69,7 @@ class Bridge:
             return await asyncio.to_thread(self.transcriber.transcribe, audio)
 
     def stream_factory(self, system: str, user: str):
-        extra = {"reasoning_effort": "low"} if "gpt-oss" in self.model else None
+        extra = {"reasoning_effort": "low" if "gpt-oss" in self.model else "none"}
         return stream_openai_compat(
             system, user, model=self.model,
             api_key=os.environ["GROQ_API_KEY"],
