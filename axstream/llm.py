@@ -58,6 +58,7 @@ async def stream_openai_compat(
     api_key: Optional[str] = None,
     base_url: str = "https://api.openai.com/v1",
     max_tokens: int = 2048,
+    extra: Optional[dict] = None,
 ) -> AsyncIterator[str]:
     api_key = api_key or os.environ["OPENAI_API_KEY"]
     payload = {
@@ -68,6 +69,7 @@ async def stream_openai_compat(
             {"role": "user", "content": user},
         ],
         "stream": True,
+        **(extra or {}),
     }
     headers = {"Authorization": f"Bearer {api_key}", "content-type": "application/json"}
     async with httpx.AsyncClient(timeout=120) as client:

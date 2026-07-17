@@ -6,7 +6,7 @@ Also owns the timeline printout that shows decode/execution overlap.
 from __future__ import annotations
 
 import time
-from typing import AsyncIterator, Callable
+from typing import AsyncIterator, Callable, Optional
 
 from .ax import Snapshot
 from .computer import Computer
@@ -24,9 +24,17 @@ async def run_task(
     max_bursts: int = 8,
     allow_risky: bool = True,
     verbose: bool = True,
+    on_event: Optional[Callable[[dict], None]] = None,
 ) -> list[BurstResult]:
     results: list[BurstResult] = []
     history_lines: list[str] = []
+    printer = _printer() if verbose else None
+
+    def emit(event: dict) -> None:
+        if printer:
+            printer(event)
+        if on_event:
+            on_event(event)
 
     for burst_index in range(max_bursts):
         t_obs = time.perf_counter()
@@ -39,13 +47,16 @@ async def run_task(
                 f"\n== burst {burst_index}: observed {len(snapshot.elements)} elements "
                 f"in {obs_ms:.0f}ms ({len(observation)} chars) =="
             )
+        if on_event:
+            on_event({"kind": "burst_start", "index": burst_index,
+                      "elements": len(snapshot.elements), "obs_ms": obs_ms})
 
         user = build_user(task, observation, "\n".join(history_lines[-20:]))
         executor = Executor(
             computer,
             snapshot,
             allow_risky=allow_risky,
-            on_event=_printer() if verbose else None,
+            on_event=emit,
         )
         result = await executor.run_burst(stream_factory(SYSTEM, user))
         results.append(result)
@@ -58,6 +69,9 @@ async def run_task(
 
         if verbose:
             _print_summary(result)
+        if on_event:
+            on_event({"kind": "burst_end", "index": burst_index, "status": result.status,
+                      "reason": result.reason, "overlap_s": result.overlap_seconds()})
         if result.status in ("done", "aborted"):
             break
     return results

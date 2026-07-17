@@ -18,34 +18,34 @@ import os
 import time
 
 from axstream.computer import Computer
-from axstream.llm import stream_anthropic
+from axstream.llm import stream_anthropic, stream_openai_compat
 from axstream.runner import run_task
 from axstream.voice import load_transcriber, record_and_transcribe
 
 
-def load_env_key() -> None:
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return
+def load_env_keys() -> None:
     env_path = os.path.join(os.path.dirname(__file__), ".env")
     if os.path.exists(env_path):
         for line in open(env_path):
             if "=" in line:
                 k, v = line.split("=", 1)
                 k, v = k.strip(), v.strip().strip("'\"")
-                if k in ("ANTHROPIC_API_KEY", "CLAUDE_API") and v:
-                    os.environ["ANTHROPIC_API_KEY"] = v
-                    return
+                if k == "CLAUDE_API":
+                    k = "ANTHROPIC_API_KEY"
+                if k and v and k not in os.environ:
+                    os.environ[k] = v
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--uri", default="ws://localhost:8765/ws")
-    parser.add_argument("--model", default="claude-haiku-4-5-20251001")
+    parser.add_argument("--provider", choices=["groq", "anthropic"], default="groq")
+    parser.add_argument("--model", default=None)
     parser.add_argument("--stt", choices=["parakeet", "whisper"], default="parakeet")
     parser.add_argument("--max-bursts", type=int, default=6)
     args = parser.parse_args()
 
-    load_env_key()
+    load_env_keys()
     print("loading local STT model...")
     t0 = time.perf_counter()
     transcriber = load_transcriber(prefer=args.stt)
@@ -58,8 +58,21 @@ async def main() -> None:
     computer = Computer(uri=args.uri)
     await computer.connect()
 
-    def stream_factory(system: str, user: str):
-        return stream_anthropic(system, user, model=args.model)
+    if args.provider == "groq" and os.environ.get("GROQ_API_KEY"):
+        model = args.model or "qwen/qwen3.6-27b"
+        extra = {"reasoning_effort": "low"} if "gpt-oss" in model else None
+
+        def stream_factory(system: str, user: str):
+            return stream_openai_compat(
+                system, user, model=model,
+                api_key=os.environ["GROQ_API_KEY"],
+                base_url="https://api.groq.com/openai/v1", extra=extra,
+            )
+    else:
+        model = args.model or "claude-haiku-4-5-20251001"
+
+        def stream_factory(system: str, user: str):
+            return stream_anthropic(system, user, model=model)
 
     try:
         while True:
