@@ -34,9 +34,25 @@ class ParakeetTranscriber:
         self._model = from_pretrained(model_id)
 
     def transcribe(self, audio) -> str:
-        import mlx.core as mx
+        # parakeet-mlx's transcribe() takes a file path, so round-trip through
+        # a temp WAV (int16); stdlib-only, adds ~a millisecond.
+        import os
+        import tempfile
+        import wave
 
-        result = self._model.transcribe(mx.array(audio))
+        import numpy as np
+
+        pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype("<i2")
+        fd, path = tempfile.mkstemp(suffix=".wav")
+        try:
+            with os.fdopen(fd, "wb") as f, wave.open(f, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(SAMPLE_RATE)
+                w.writeframes(pcm.tobytes())
+            result = self._model.transcribe(path)
+        finally:
+            os.unlink(path)
         return result.text.strip()
 
 
