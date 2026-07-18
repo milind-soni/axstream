@@ -63,8 +63,8 @@ checks all of them:
 
 | piece | what it is | install |
 |---|---|---|
-| tiny matcher | any OpenAI-compatible server hosting a matcher model (llama-server recommended) | `llama-server -m <matcher>.gguf --port 8791 -ngl 99 -c 4096 --no-webui`; override with `AXSTREAM_TINY_URL` |
-| executor | [cua-driver](https://github.com/trycua/cua) — background, pid-addressed input delivery, no focus stealing | cua's installer; grant Accessibility once |
+| tiny matcher | any OpenAI-compatible server hosting a matcher model (llama-server recommended) | `brew install llama.cpp`, download a matcher GGUF, `llama-server -m <matcher>.gguf --port 8791 -ngl 99 -c 4096 --no-webui`; override with `AXSTREAM_TINY_URL` — see [Quickstart](/docs/quickstart) |
+| executor | [cua-driver](https://github.com/trycua/cua) — background, pid-addressed input delivery, no focus stealing | `/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"`, grant Accessibility once |
 | macro store | a JSON file of learned commands | created automatically at `~/.axstream/macros.json` |
 
 Use a **fine-tuned** matcher model: base LFM2.5-350M scores ~47% end-to-end;

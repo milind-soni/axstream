@@ -1,91 +1,118 @@
 ---
 title: Quickstart
-description: Run the no-keys demo, then drive a live machine.
+description: From zero to actions-by-text on a fresh Mac.
 ---
 
-The repo ships a reference implementation in Python: the newline-committed
-stream compiler, action catalog, accessibility-tree observer, and pipelined
-executor. Manage the environment with
-[uv](https://docs.astral.sh/uv/).
+Everything below starts from nothing. You need
+[uv](https://docs.astral.sh/uv/) and [Homebrew](https://brew.sh).
 
-## 1. Dry demo — no keys, no server
+## 1. Get axstream
 
 ```sh
-uv run --with pytest python demo_dry.py
+git clone https://github.com/milind-soni/axstream
+cd axstream
+uv sync
+```
+
+## 2. Dry demo — no keys, no server, 10 seconds
+
+```sh
+uv run python demo_dry.py
 ```
 
 Replays a canned LLM response at realistic decode speed into the real compiler
-and executor against a mock computer. It prints a timeline of actions executing
-mid-stream, then compares streamed total vs a buffered baseline (wait for the
-full response, then act) — typically ~37% saved.
+and executor against a mock computer, and prints the streamed-vs-buffered
+timeline — typically ~37% wall-clock saved. This is the core thesis with zero
+setup.
 
-## 2. Live streaming (macOS)
+## 3. Set up the local pieces (once)
 
-The live path drives [cua](https://github.com/trycua/cua)'s `computer-server`
-for clicks, keys, and the accessibility tree.
+Three local processes power the real thing. `python -m axstream --doctor`
+tells you at any point what's missing.
 
 <Steps>
 
 <Step>
 
-### Start computer-server
-
-Grant your terminal **Accessibility** permission first.
+### The tiny matcher (instant tier)
 
 ```sh
-git clone https://github.com/trycua/cua ../cua
-cd ../cua/libs/python/computer-server
-uv run python -m computer_server --port 8765
+brew install llama.cpp
+mkdir -p ~/models && curl -L -o ~/models/LFM2.5-350M-Q4_K_M.gguf \
+  "https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF/resolve/main/LFM2.5-350M-Q4_K_M.gguf"
+llama-server -m ~/models/LFM2.5-350M-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
 ```
+
+<Callout title="Base model = demo grade">
+The stock LFM2.5-350M scores ~47% end-to-end on match + slot extraction; a
+small LoRA fine-tune reaches ~93% at the same ~100ms. Misses are safe (they
+fall through to the LLM tier), but fine-tune before judging the instant tier.
+Any OpenAI-compatible server works — point `AXSTREAM_TINY_URL` at it.
+</Callout>
 
 </Step>
 
 <Step>
 
-### Stream a task
+### The executor: cua-driver
+
+Background, pid-addressed keyboard/mouse delivery — no focus stealing.
 
 ```sh
-export GROQ_API_KEY=...   # or ANTHROPIC_API_KEY with --provider anthropic
-uv run python demo_live.py --task "open TextEdit and type hello world" \
-  --uri ws://localhost:8765/ws
+/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"
 ```
 
-Flags: `--provider` (groq / anthropic / openai), `--model`, `--max-bursts`,
-`--no-risky` to block actions marked `risk:risky`.
+Grant **Accessibility** permission when prompted.
+
+</Step>
+
+<Step>
+
+### (Optional) computer-server — for the streaming LLM demo
+
+The streaming demo (`demo_live.py`) observes the accessibility tree through
+cua's computer-server:
+
+```sh
+git clone https://github.com/trycua/cua
+cd cua/libs/python/computer-server
+uv run python -m computer_server --port 8765
+```
+
+Grant your terminal **Accessibility** permission.
 
 </Step>
 
 </Steps>
 
-## 3. Learn-and-replay (the instant tier)
-
-`demo_learn.py` shows the three-speed system: the first time you type a
-command, an LLM plans and executes it (~0.5–1s) and the run is captured as a
-parameterized macro; from then on, a local 350M matcher replays it in ~100ms
-with no LLM — including slot variations ("titled standup" → "titled yoyo").
-
-Extra prereq — a tiny matcher on `:8791` (or set `AXSTREAM_TINY_URL`):
+## 4. Run things
 
 ```sh
-llama-server -m <matcher>.gguf --port 8791 -ngl 99 -c 4096 --no-webui
-uv run python demo_learn.py
+# check the setup
+uv run python -m axstream --doctor
+
+# one utterance -> one action (instant tier; JSON result on stdout)
+uv run python -m axstream "launch safari"
+
+# instant-tier demo with seeded macros — slot variations, timings
+uv run python demo_replay.py
+
+# speak instead of type (local STT; needs: uv sync --extra voice)
+uv run python demo_voice.py --hands-free
+
+# stream a novel task through an LLM (needs computer-server + a key)
+export GROQ_API_KEY=...
+uv run python demo_live.py --task "open TextEdit and type hello world" \
+  --uri ws://localhost:8765/ws
 ```
 
-<Callout title="Use a fine-tuned matcher">
-The base LFM2.5-350M scores ~47% end-to-end on match + slot extraction; a
-small LoRA fine-tune (~2.5k synthetic examples, under an hour on Apple
-Silicon) reaches ~93% at the same ~100ms. Misses are safe — a failed match
-falls back to the LLM tier — but the instant tier only feels instant with a
-tuned matcher.
-</Callout>
-
-## 4. Tests
+## 5. Tests
 
 ```sh
-uv run pytest
+uv run pytest tests
 ```
 
 <Cards>
+  <Card title="Integrate your STT" href="/docs/integrate" description="You own audio → text; axstream owns text → action." />
   <Card title="The Spec" href="/docs/spec" description="The canonical wire format and execution contract." />
-  <Card title="Roadmap" href="/docs/roadmap" description="What's shipped, what's next." />
 </Cards>

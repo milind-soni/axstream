@@ -39,20 +39,26 @@ accuracy** (fine-tuned 350M matcher, held-out eval).
 ## Run it
 
 ```sh
+git clone https://github.com/milind-soni/axstream && cd axstream && uv sync
+
 # dry demo — no keys, no server; proves the streaming overlap
-uv run --with pytest python demo_dry.py
+uv run python demo_dry.py
 
-# live streaming (macOS) — needs cua's computer-server + an LLM key
-cd ../cua/libs/python/computer-server && uv run python -m computer_server --port 8765
-export GROQ_API_KEY=...
-uv run python demo_live.py --task "open TextEdit and type hello world" --uri ws://localhost:8765/ws
+# set up the local pieces once (full walkthrough: axstream.dev/docs/quickstart)
+brew install llama.cpp
+curl -L -o ~/models/LFM2.5-350M-Q4_K_M.gguf \
+  "https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF/resolve/main/LFM2.5-350M-Q4_K_M.gguf"
+llama-server -m ~/models/LFM2.5-350M-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
+/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"   # executor (grant Accessibility)
 
-# learn-and-replay (the instant tier) — also needs a tiny matcher on :8791
-llama-server -m <matcher>.gguf --port 8791 -ngl 99 -c 4096 --no-webui
-uv run python demo_learn.py
+# verify, then act
+uv run python -m axstream --doctor
+uv run python -m axstream "launch safari"
+uv run python demo_replay.py                 # instant-tier demo, seeded macros
+uv run python demo_voice.py --hands-free     # speak it (uv sync --extra voice)
 
 # tests
-uv run pytest
+uv run pytest tests
 ```
 
 Use a **fine-tuned** matcher for the instant tier (base LFM2.5-350M ≈47% e2e
