@@ -110,6 +110,55 @@ def record_push_to_talk() -> "tuple":
     return np.concatenate(chunks)[:, 0], seconds
 
 
+def record_hands_free(max_wait_s: float = 45.0, silence_s: float = 0.9) -> "tuple":
+    """Blocking: wait for speech, record until ~silence_s of quiet, return
+    (audio, spoke_seconds). Ambient-adaptive RMS gate; (empty, 0) on timeout."""
+    import numpy as np
+    import sounddevice as sd
+
+    block = int(SAMPLE_RATE * 0.1)  # 100ms blocks
+    chunks: list = []
+
+    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32",
+                        blocksize=block) as stream:
+        ambient = np.mean([np.sqrt(np.mean(stream.read(block)[0][:, 0] ** 2))
+                           for _ in range(5)])
+        threshold = max(0.010, ambient * 4)
+
+        started = None
+        quiet_blocks = 0
+        t0 = time.perf_counter()
+        pre_roll: list = []
+        while True:
+            data = stream.read(block)[0][:, 0]
+            rms = float(np.sqrt(np.mean(data ** 2)))
+            if started is None:
+                pre_roll.append(data)
+                pre_roll = pre_roll[-3:]
+                if rms > threshold:
+                    started = time.perf_counter()
+                    chunks = pre_roll + [data]
+                elif time.perf_counter() - t0 > max_wait_s:
+                    return np.zeros(1, dtype="float32"), 0.0
+            else:
+                chunks.append(data)
+                quiet_blocks = quiet_blocks + 1 if rms < threshold else 0
+                if quiet_blocks * 0.1 >= silence_s:
+                    return np.concatenate(chunks), time.perf_counter() - started
+
+
+async def listen_and_transcribe(transcriber: Transcriber) -> tuple[str, dict]:
+    """Hands-free: wait for one utterance -> transcribe. Same contract as
+    record_and_transcribe."""
+    audio, spoke_s = await asyncio.to_thread(record_hands_free)
+    if spoke_s == 0.0:
+        return "", {"record_s": 0.0, "transcribe_ms": 0.0}
+    t0 = time.perf_counter()
+    text = await asyncio.to_thread(transcriber.transcribe, audio)
+    return text, {"record_s": spoke_s,
+                  "transcribe_ms": (time.perf_counter() - t0) * 1000}
+
+
 async def record_and_transcribe(transcriber: Transcriber) -> tuple[str, dict]:
     """One utterance: record (blocking input in a thread) -> transcribe. Returns
     (text, timing) where timing has record_s / transcribe_ms."""

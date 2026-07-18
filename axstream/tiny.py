@@ -82,6 +82,14 @@ def build_prompt(templates: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def slots_verbatim(utterance: str, slots: dict) -> bool:
+    """The matcher's contract: every slot value is copied verbatim from the
+    utterance. A value that isn't there was hallucinated (typically copied from
+    a few-shot example) — reject the match rather than act on invented input."""
+    low = utterance.lower()
+    return all(str(v).strip().lower() in low for v in slots.values())
+
+
 class TinyMatcher:
     def __init__(self, url: str = DEFAULT_URL, timeout: float = 5.0):
         self.url = url
@@ -117,6 +125,8 @@ class TinyMatcher:
             return None
         if result.get("template") in (None, "none"):
             return None
+        if not slots_verbatim(utterance, result.get("slots", {})):
+            return None  # hallucinated slot -> route to the LLM tier instead
         return result
 
     def warm(self, templates: list[dict]) -> None:

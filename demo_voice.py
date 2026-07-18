@@ -17,6 +17,7 @@ Prereqs:
 Usage:  uv run python demo_voice.py    (say "quit" to stop)
 """
 
+import argparse
 import asyncio
 import time
 
@@ -25,14 +26,19 @@ from axstream.driver import DriverComputer
 from axstream.executor import Executor
 from axstream.macros import MacroStore
 from axstream.tiny import TinyMatcher
-from axstream.voice import load_transcriber, record_and_transcribe
+from axstream.voice import load_transcriber, listen_and_transcribe, record_and_transcribe
 from demo_replay import SEED
 
 RESET, DIM, GREEN, YELLOW, BOLD = "\033[0m", "\033[2m", "\033[32m", "\033[33m", "\033[1m"
 
 
 async def main() -> None:
-    print("loading local STT...")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--hands-free", action="store_true",
+                        help="no keyboard: speak, pause ~1s, it acts (say 'quit' to stop)")
+    args = parser.parse_args()
+
+    print("loading local STT...", flush=True)
     t0 = time.perf_counter()
     transcriber = load_transcriber()
     import numpy as np
@@ -57,12 +63,18 @@ async def main() -> None:
     print(f"{BOLD}axstream — voice → instant tier{RESET}")
     print(f"{DIM}macros: {', '.join(store.macros)} | say 'quit' to stop{RESET}\n")
 
+    if args.hands_free:
+        print(f"{DIM}hands-free: listening — just speak, pause to commit{RESET}\n", flush=True)
+
     try:
         while True:
-            text, timing = await record_and_transcribe(transcriber)
+            if args.hands_free:
+                text, timing = await listen_and_transcribe(transcriber)
+            else:
+                text, timing = await record_and_transcribe(transcriber)
             utterance = text.strip().lower().rstrip(".!?")
             if not utterance:
-                print(f"  {DIM}(heard nothing){RESET}\n")
+                print(f"  {DIM}(heard nothing — still listening){RESET}\n", flush=True)
                 continue
             print(f"  heard: \"{utterance}\"  {DIM}stt {timing['transcribe_ms']:.0f}ms{RESET}")
             if utterance in ("quit", "exit", "stop"):
