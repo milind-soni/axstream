@@ -86,6 +86,26 @@ docs/              Fumadocs site (deploys to axstream.dev; Root Directory=docs)
 - **Docs live** at axstream.dev (dark/Vercel-black, 4 pages: Intro / Spec /
   Quickstart / Roadmap), Git-connected auto-deploy.
 
+## 4b. Execution backend: use cua-driver, NOT computer-server (proven 2026-07-19)
+
+The reference `Computer` (computer-server WebSocket) is **flaky for execution**:
+the unscoped `get_accessibility_tree` hangs (full-desktop walk), Notes is
+AX-hostile (creates an empty note, typing goes nowhere), and focus races drop
+keystrokes. **cua-driver is the reliable executor edge** — `axstream/driver.py`
+`DriverComputer` (MCP over stdio to `~/.local/bin/cua-driver`). It delivers
+keys/clicks to a specific pid in the **background** (no focus race). Verified
+live: typing lands with `"verified": true`, and the full instant tier
+(tiny match -> `executor.replay` -> DriverComputer) types the correct
+slot-filled text into TextEdit reliably. `demo_replay.py` is that working demo.
+Gotcha: `launch_app` returns the pid in PROSE text ("...(pid 6821)..."), parsed
+by `DriverComputer._extract_pid`; `tool()` first arg is positional-only to
+avoid colliding with a `name=` argument.
+
+Next: port the AX *observation* mapping (driver `get_accessibility_tree` +
+`get_window_state` -> our Snapshot shape, as the Swift app's Observer did) so
+the LLM tier can also run on the driver; then demo_learn uses DriverComputer
+for both tiers.
+
 ## 5. THE OPEN GAP (do this next)
 
 **Base LFM2.5-350M gets templates mostly right but fumbles slot extraction

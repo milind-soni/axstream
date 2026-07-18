@@ -29,6 +29,7 @@ from axstream.executor import Executor
 from axstream.llm import stream_openai_compat
 from axstream.macros import Macro, MacroStore
 from axstream.prompt import SYSTEM, build_user
+from axstream.runner import run_task
 from axstream.ax import Snapshot
 from axstream.tiny import TinyMatcher
 
@@ -60,30 +61,21 @@ async def observe(computer: Computer) -> Snapshot:
 
 
 async def run_llm_tier(computer: Computer, task: str) -> tuple[list[dict], bool]:
-    """LLM tier: stream one burst, execute it, return the executed actions."""
-    snapshot = await observe(computer)
-    executor = Executor(computer, snapshot, allow_risky=True)
-    user = build_user(task, snapshot.summarize())
-    compiler = StreamCompiler()
-
+    """LLM tier: the full observe->stream->execute->re-observe loop (not a
+    single burst), collecting every action that actually ran so the whole
+    multi-step command can be captured as a macro."""
     executed: list[dict] = []
-
-    async def chunks():
-        async for c in groq_stream(SYSTEM, user):
-            yield c
-
-    # tap the executor's events to collect what actually ran
-    orig = executor.on_event
 
     def collect(e: dict) -> None:
         if e["kind"] == "executed":
             executed.append(e["op"])
-        if orig:
-            orig(e)
 
-    executor.on_event = collect
-    result = await executor.run_burst(chunks())
-    return executed, result.status in ("done", "observe")
+    results = await run_task(
+        computer, task, lambda s, u: groq_stream(s, u),
+        max_bursts=6, verbose=False, on_event=collect,
+    )
+    ok = bool(results) and results[-1].status == "done"
+    return executed, ok
 
 
 async def main() -> None:
