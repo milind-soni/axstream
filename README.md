@@ -76,3 +76,8 @@ model. Key properties:
 ```sh
 uv run pytest
 ```
+
+## License
+
+Reference implementation: MIT (see [LICENSE](LICENSE)).
+The spec ([SPEC.md](SPEC.md)) is CC BY 4.0.
