@@ -27,71 +27,32 @@ class DriverError(RuntimeError):
 class DriverComputer:
     def __init__(self, binary: str = DRIVER_BIN):
         self.binary = binary
-        self._proc: Optional[asyncio.subprocess.Process] = None
-        self._id = 0
-        self._lock = asyncio.Lock()
         self.target_pid: Optional[int] = None  # follows `open`
 
     async def connect(self) -> None:
-        self._proc = await asyncio.create_subprocess_exec(
-            self.binary, "mcp",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await self._rpc("initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "axstream", "version": "0.1"},
-        })
-        await self._notify("notifications/initialized")
+        """No persistent process needed — `cua-driver call` proxies to the
+        always-running CuaDriver daemon. Kept for interface parity."""
+        return None
 
     async def close(self) -> None:
-        if self._proc:
-            self._proc.terminate()
-            try:
-                await asyncio.wait_for(self._proc.wait(), timeout=3)
-            except asyncio.TimeoutError:
-                self._proc.kill()
-            self._proc = None
-
-    # -- MCP plumbing ------------------------------------------------------
-
-    async def _send(self, obj: dict) -> None:
-        assert self._proc and self._proc.stdin
-        self._proc.stdin.write((json.dumps(obj) + "\n").encode())
-        await self._proc.stdin.drain()
-
-    async def _notify(self, method: str, params: Optional[dict] = None) -> None:
-        await self._send({"jsonrpc": "2.0", "method": method, "params": params or {}})
-
-    async def _rpc(self, method: str, params: dict) -> dict:
-        assert self._proc and self._proc.stdout
-        self._id += 1
-        rid = self._id
-        await self._send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
-        while True:
-            line = await asyncio.wait_for(self._proc.stdout.readline(), timeout=30)
-            if not line:
-                raise DriverError("cua-driver closed the stream")
-            msg = json.loads(line)
-            if msg.get("id") == rid:
-                if "error" in msg:
-                    raise DriverError(f"{method}: {msg['error']}")
-                return msg.get("result", {})
+        return None
 
     async def tool(self, _tool_name: str, /, **args: Any) -> dict:
-        """Call an MCP tool; returns its structured content (parsed)."""
-        async with self._lock:
-            result = await self._rpc("tools/call", {"name": _tool_name, "arguments": args})
-        content = result.get("content") or []
-        for block in content:
-            if block.get("type") == "text":
-                try:
-                    return json.loads(block["text"])
-                except (json.JSONDecodeError, KeyError):
-                    return {"text": block.get("text", "")}
-        return result.get("structuredContent") or {}
+        """Call a driver tool via `cua-driver call` (proxies to the warm
+        daemon in ~10ms). Faster and simpler than the persistent MCP-stdio
+        path, which added ~1s/call overhead."""
+        proc = await asyncio.create_subprocess_exec(
+            self.binary, "call", _tool_name, json.dumps(args),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=30)
+        text = out.decode().strip()
+        if proc.returncode != 0:
+            raise DriverError(f"{_tool_name}: {err.decode().strip() or text}")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return {"text": text}
 
     # -- Executor-facing surface ------------------------------------------
 
