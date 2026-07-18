@@ -1,0 +1,248 @@
+# axstream action spec
+
+**Version 0.1** · a streaming action language for computer-use agents
+
+---
+
+## 1. What this is
+
+axstream is a wire format for an LLM to drive a computer. The model emits a
+stream of **actions, one JSON object per line**, and an executor performs each
+action the moment its line is complete — *while the model is still generating*.
+
+The design has one central idea: **the newline is the commit signal.** An
+action either arrives as a whole, parseable line or it does not execute at all.
+This makes streaming execution safe by construction — a half-generated action
+can never fire — and lets execution overlap generation instead of waiting for
+the full response.
+
+The format is model-agnostic and transport-agnostic. Any LLM that can stream
+text can produce it; any runtime that can parse a line and perform an action can
+consume it.
+
+### Design goals
+
+- **Truncation-safe.** Partial output never causes partial actions.
+- **Streamable.** Actions execute as they arrive, not after the response ends.
+- **Late-bound.** Element targets resolve against the live screen at execution
+  time, not against the (already stale) observation the model planned from.
+- **Small.** A model can emit it reliably from a short prompt, with no
+  provider-specific tool-calling machinery.
+
+---
+
+## 2. Wire format
+
+Actions are emitted as **JSONL** (one JSON object per line) inside a fenced code
+block. The model may write free-form text before the fence; that text is
+narration, not action.
+
+````
+I'll open the notes app and jot that down.
+```spec
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"wait","ms":500}
+{"op":"act","do":"type","text":"remember to buy milk"}
+{"op":"done","status":"success"}
+```
+````
+
+### Framing rules
+
+- A line beginning with three backticks **opens** the action fence. The fence
+  tag is advisory — `` ```spec ``, `` ```jsonl ``, `` ```json ``, or a bare
+  `` ``` `` all open it. A conforming parser MUST accept any of these.
+- A line that is exactly three backticks **closes** the fence.
+- Inside the fence, each non-empty line MUST be a complete JSON object. A line
+  that fails to parse, or parses but is not a valid action, is **dropped**; the
+  stream continues.
+- Outside the fence, lines are **narration** and carry no execution semantics.
+
+### Streaming semantics
+
+A conforming executor processes input incrementally:
+
+1. Buffer incoming text. Split on newline.
+2. The final, not-yet-terminated line stays buffered until its newline arrives.
+3. Each completed line inside the fence is parsed and, if valid, executed
+   **immediately**, in order.
+
+Identical lines are **not** deduplicated. Unlike a UI-patch format, repetition
+is meaningful — clicking the same button twice is a legitimate plan.
+
+---
+
+## 3. The action model
+
+Every line has an `op` field. There are four operations.
+
+| `op` | meaning |
+|------|---------|
+| `act`     | perform an action against the computer |
+| `assert`  | require an element to exist; abort the burst if it is missing |
+| `observe` | end the current burst and request a fresh observation |
+| `done`    | the task is complete (or failed) |
+
+A **burst** is one run of the fence: the model observes the screen once, emits a
+run of actions, and ends with `observe` (I need to look again) or `done`
+(finished). The controlling loop re-observes and re-prompts on `observe`.
+
+### 3.1 `act`
+
+```json
+{"op":"act","do":"<action>", ...fields, "risk":"<class>"}
+```
+
+`do` selects the action. `risk` is optional (§5). As a convenience, a runtime
+MAY accept the shorthand `{"op":"<action>", ...}` and treat it as
+`{"op":"act","do":"<action>", ...}`.
+
+The action vocabulary:
+
+| `do` | fields | effect |
+|------|--------|--------|
+| `click`        | `target` | click an element or point |
+| `double_click` | `target` | double-click |
+| `type`         | `text`   | type text into the focused field |
+| `key`          | `keys`   | press a key or chord, e.g. `["cmd","s"]` |
+| `scroll`       | `direction`, `clicks?` | scroll `up`/`down`/`left`/`right` |
+| `move`         | `target` | move the pointer |
+| `open`         | `target` (string) | open an app by name or a URL |
+| `wait`         | `ms`     | pause (e.g. to let a window settle) |
+
+### 3.2 `assert`
+
+```json
+{"op":"assert","target":{"ax":{"role":"AXButton","title":"Save"}}}
+```
+
+Resolve `target`; if it cannot be resolved, abort the burst. Use it as a
+precondition before a risky step.
+
+### 3.3 `observe`
+
+```json
+{"op":"observe"}
+```
+
+End the burst. The runtime takes a fresh observation and re-prompts. Emit this
+only when the next action depends on something not yet knowable (search results,
+a dialog's contents, a page that must load) — not to "check" or "confirm."
+
+### 3.4 `done`
+
+```json
+{"op":"done","status":"success"}
+{"op":"done","status":"failure","reason":"no export option in this app"}
+```
+
+`status` is `success` or `failure`. On failure, `reason` SHOULD explain why.
+
+---
+
+## 4. Targets
+
+Actions that address a location (`click`, `double_click`, `move`, `assert`) take
+a `target`. Three forms, in order of preference:
+
+**By element id** — references an element from the observation the runtime gave
+the model:
+
+```json
+{"ax":{"id":"e12"}}
+```
+
+**By role and/or title** — resolved fuzzily against the *live* accessibility
+tree at execution time (this is the late-binding path; it survives small screen
+changes between planning and acting):
+
+```json
+{"ax":{"role":"AXButton","title":"Save"}}
+```
+
+**By coordinate** — a raw screen point, last resort:
+
+```json
+{"x":420,"y":312}
+```
+
+`open` is the exception: its `target` is a plain string (an app name or a URL),
+not a target object.
+
+---
+
+## 5. Risk classes
+
+Any `act` MAY carry `"risk":"risky"` to mark a hard-to-undo action —
+submitting a form, deleting, sending, purchasing. A runtime MAY gate risky
+actions behind confirmation or a policy switch, or refuse them, without changing
+the meaning of the stream. Unmarked actions default to `safe`.
+
+This is the seam for bounded speculation: a runtime can execute `safe` actions
+eagerly as they stream, and hold `risky` ones until the stream completes or the
+user confirms.
+
+---
+
+## 6. Execution contract
+
+A conforming executor:
+
+1. **Commits at newlines.** No action executes before its line is complete.
+2. **Executes in order.** Lines fire in the order they arrive.
+3. **Does not deduplicate.** Identical consecutive lines both execute.
+4. **Drops the unparseable.** An invalid line is skipped; the stream continues.
+5. **Resolves targets late.** `ax` targets resolve against the live screen at
+   the moment of execution, not against the planning observation.
+6. **Honors barriers.** `observe` ends the burst; `assert` failure aborts it;
+   `done` ends the task.
+
+Everything else — how observations are produced, which backend performs the
+clicks, how risky actions are gated — is left to the runtime.
+
+---
+
+## 7. Full example
+
+Task: *"open a new note and write a reminder."*
+
+Burst 1 — the model plans the whole thing in one fence, no re-observation
+needed because it knows how the app behaves:
+
+````
+```spec
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"wait","ms":500}
+{"op":"act","do":"key","keys":["cmd","n"]}
+{"op":"act","do":"type","text":"reminder: submit the spec"}
+{"op":"done","status":"success"}
+```
+````
+
+A burst that *does* need to observe — clicking a result that doesn't exist yet:
+
+````
+```spec
+{"op":"act","do":"key","keys":["cmd","l"]}
+{"op":"act","do":"type","text":"weather tokyo\n"}
+{"op":"act","do":"wait","ms":800}
+{"op":"observe"}
+```
+````
+
+After `observe`, the runtime re-observes and re-prompts; the model then emits a
+new fence that references the freshly-appeared elements.
+
+---
+
+## 8. Versioning
+
+This document is **axstream-spec 0.1**. The version covers the operation set,
+the action vocabulary, the target forms, and the execution contract. Additive
+changes (new `do` actions, new optional fields) bump the minor version;
+breaking changes bump the major.
+
+## 9. License
+
+The specification is released under CC BY 4.0. Reference implementations under
+their repository's license.

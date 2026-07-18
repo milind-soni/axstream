@@ -1,15 +1,25 @@
 # axstream
 
-Streaming JSONL action spec for computer use. The LLM streams one JSON action
-per line inside a ```` ```spec ```` fence; the executor performs each action the
-moment its newline arrives — while the model is still generating. Observation
-is accessibility-tree-first (terse text, cheap prefill, fast models), with
-element targets late-bound against the live tree at execution time.
+**A streaming action language for computer-use agents.** An LLM streams
+actions one JSON object per line; the executor performs each action the moment
+its newline arrives — while the model is still generating. The newline is the
+commit signal, so a half-generated action can never fire, and execution
+overlaps generation instead of waiting for the full response.
 
-Execution backend: [cua](https://github.com/trycua/cua)'s `computer-server`,
-driven over one persistent WebSocket. The core here is the spec, the
-newline-committed stream compiler, and the pipelined executor — the reusable
-foundation for a trained macOS-AX action model.
+**→ [Read the spec: SPEC.md](SPEC.md)** (axstream-spec 0.1)
+
+```spec
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"wait","ms":500}
+{"op":"act","do":"type","text":"remember to buy milk"}
+{"op":"done","status":"success"}
+```
+
+This repo holds the spec plus a reference implementation: the newline-committed
+stream compiler ([compiler.py](axstream/compiler.py)), the action catalog
+([spec.py](axstream/spec.py)), an accessibility-tree-first observer, and a
+pipelined executor that drives [cua](https://github.com/trycua/cua)'s
+`computer-server`.
 
 ## Why
 
