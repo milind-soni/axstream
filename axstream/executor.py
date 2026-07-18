@@ -167,6 +167,42 @@ class Executor:
         self._emit(result, "executed", op=op, t_start=t_start, t_done=t_done)
         return False
 
+    async def replay(self, actions: list[dict], guard: Optional[dict] = None) -> BurstResult:
+        """Zoxide-tier replay: run a cached action stream with no LLM. The
+        guard (an ax target) must resolve against the live screen first; a
+        guard miss returns status 'guard_failed' so the caller can fall back
+        to the LLM tier. Reuses the same per-op execution + late binding as a
+        streamed burst, so replayed actions behave identically."""
+        result = BurstResult(status="done")
+        if guard is not None:
+            ax = guard.get("ax", {})
+            el = self.snapshot.resolve_element(ax) or await self._refresh_and_resolve(ax)
+            if el is None:
+                result.status = "guard_failed"
+                result.reason = f"guard did not resolve: {guard}"
+                self._emit(result, "guard_failed", guard=guard)
+                return result
+        for op in actions:
+            if op.get("op") != "act":
+                continue
+            resolved = None
+            target = op.get("target")
+            if isinstance(target, dict) and "ax" in target:
+                resolved = self.snapshot.resolve_element(target["ax"])
+                if resolved is not None:
+                    op = {**op, "resolved": f"{resolved.role} {resolved.title!r}"}
+            t_start = self._now()
+            try:
+                await self._execute(op)
+            except Exception as e:  # noqa: BLE001 - abort replay, caller may fall back
+                self._emit(result, "action_failed", op=op, error=str(e), t_start=t_start)
+                result.status = "aborted"
+                result.reason = f"{op.get('do')}: {e}"
+                return result
+            result.last_action_done_at = self._now()
+            self._emit(result, "executed", op=op, t_start=t_start, t_done=result.last_action_done_at)
+        return result
+
     async def _execute(self, op: dict) -> None:
         do = op["do"]
         if do == "wait":
