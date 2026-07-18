@@ -1,0 +1,42 @@
+---
+title: Roadmap
+description: Where this is going — an open macOS accessibility-tree action model, an open-core dataset, and speech to action.
+---
+
+<Callout title="Forward-looking">
+Everything on this page is **future direction**, not shipped behavior. The
+canonical, implemented surface is [the spec](/docs/spec) and the reference
+implementation. Treat the items below as intent, subject to change.
+</Callout>
+
+axstream today is a spec plus a reference implementation: a streaming action
+language and a runtime that drives a live macOS machine through the
+accessibility tree. The direction from here:
+
+## An open macOS accessibility-tree action model
+
+The reference stack already produces the two halves of a training signal:
+**terse accessibility-tree observations** and **streamed action bursts** that
+were actually executed against a live machine. The aim is an open action model
+specialized for driving macOS from the AX tree — small enough to emit the format
+reliably, and grounded in real accessibility structure rather than pixels.
+
+## An open-core dataset
+
+Paired *(observation, action-stream, outcome)* traces are the raw material for
+that model. The intent is to grow and release such a dataset **open-core** — an
+open corpus of accessibility-tree-grounded computer-use behavior — so the action
+model and the format can improve together in the open.
+
+## Speech → action
+
+With a fast, streamable action language in place, the natural front end is
+**speech**: a spoken instruction transcribed and turned directly into a streamed
+action burst, executing as the words are still being understood. The
+newline-commit model is a good fit for that low-latency, incremental path.
+
+---
+
+If you want to shape any of this, start from [the spec](/docs/spec) — the
+format is versioned so it can evolve additively without breaking existing
+runtimes.

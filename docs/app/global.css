@@ -1,0 +1,33 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/* Vercel-black dark theme: pure #000 canvas, high-contrast text,
+   hairline zinc borders, near-black raised surfaces. Fumadocs expects full
+   hsl() function values here. */
+.dark {
+  --color-fd-background: hsl(0, 0%, 0%);
+  --color-fd-foreground: hsl(0, 0%, 98%);
+  --color-fd-card: hsl(0, 0%, 4%);
+  --color-fd-card-foreground: hsl(0, 0%, 98%);
+  --color-fd-popover: hsl(0, 0%, 4%);
+  --color-fd-popover-foreground: hsl(0, 0%, 96%);
+  --color-fd-muted: hsl(0, 0%, 8%);
+  --color-fd-muted-foreground: hsl(0, 0%, 63%);
+  --color-fd-border: hsl(0, 0%, 15%);
+  --color-fd-accent: hsl(0, 0%, 11%);
+  --color-fd-accent-foreground: hsl(0, 0%, 98%);
+  --color-fd-secondary: hsl(0, 0%, 8%);
+  --color-fd-secondary-foreground: hsl(0, 0%, 96%);
+  --color-fd-primary: hsl(0, 0%, 98%);
+  --color-fd-primary-foreground: hsl(0, 0%, 9%);
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}

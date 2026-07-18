@@ -1,0 +1,72 @@
+---
+title: Introduction
+description: Voice to action, as fast as dictation.
+---
+
+## Voice to action, as fast as dictation
+
+Dictation feels instant — you speak, and words appear as fast as you talk.
+**Voice to action** should feel the same: you say *"reply to Lawrence, I'll see
+him tomorrow,"* and it just happens, at the speed of speech.
+
+It doesn't today. The lag is what makes voice control feel like a toy instead of
+a superpower. But that latency isn't fundamental — it comes from three specific
+places, and each one has a fix.
+
+## Where the latency actually lives
+
+**1. Vision models.** Most computer-use agents look at *pixels* — they
+screenshot the screen and ask a vision model where to click. That is slow and
+expensive. But your computer already exposes a **structured, text description of
+every button and field**: the accessibility tree. Reading text is far faster
+than looking at an image. Drop vision; read the tree.
+
+**2. Waiting for the model to finish thinking.** Agents send the screen to a
+model, wait for the *entire* response, perform one action, then repeat. But
+models already **stream** their output token by token — so instead of waiting
+for the whole plan, we stream the **actions themselves** and perform each one the
+moment it arrives, while the model is still generating.
+
+**3. Figuring out what you meant.** *"Message Agni I'll see him tomorrow"* —
+which app? who is Agni? what tone? Resolving that context is the real latency
+killer, and calling a model every time is the slow way to do it. The fast way:
+**most of what you do, you have done before.** Learn it once, and next time skip
+the thinking entirely.
+
+## The idea
+
+axstream is a small structured language — one action per line — that a model can
+stream, a runtime can replay, and a person can read:
+
+```spec
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"wait","ms":500}
+{"op":"act","do":"type","text":"remember to buy milk"}
+{"op":"done","status":"success"}
+```
+
+Each line executes the instant its newline arrives — the `open` fires before the
+model has finished generating the `type` below it. One action either arrives as a
+whole, valid line or it does not execute at all, so streaming is safe by
+construction.
+
+That one language is the center of a system with **three speeds**:
+
+- **Instant** — actions you have done before replay directly, ranked by how often
+  and how recently you use them, with no model in the loop. (The trick
+  [zoxide](https://github.com/ajeetdsouza/zoxide) uses to jump you to a directory
+  before you finish typing — applied to actions.)
+- **Fast** — novel actions are streamed by a small, quick model as JSONL over the
+  accessibility tree, executing as the lines arrive.
+- **Fallback** — for the long tail of apps with no clean integration, drive them
+  through computer use.
+
+The format is model-agnostic and transport-agnostic: any LLM that can stream text
+can produce it, any runtime that can parse a line can perform it. No
+provider-specific tool-calling machinery to adopt.
+
+<Cards>
+  <Card title="The Spec" href="/docs/spec" description="The action language: wire format, actions, and execution contract." />
+  <Card title="Quickstart" href="/docs/quickstart" description="Run it against a live machine in a couple of minutes." />
+  <Card title="Roadmap" href="/docs/roadmap" description="The three-speed vision, a learned action library, and speech to action." />
+</Cards>

@@ -6,3 +6,10 @@ __pycache__/
 .DS_Store
 bar/node_modules/
 swift/.build/
+
+# docs site (Fumadocs / Next.js)
+docs/node_modules/
+docs/.next/
+docs/.source/
+docs/out/
+docs/.vercel/
