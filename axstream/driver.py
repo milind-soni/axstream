@@ -70,9 +70,13 @@ class DriverComputer:
         else:
             res = await self.tool("launch_app", name=target)
         pid = self._extract_pid(res)
-        if pid:
-            self.target_pid = pid
-            await self.tool("bring_to_front", pid=pid)
+        if pid is None:
+            # no pid = the launch didn't land (unknown app name, driver error).
+            # Fail the action so replay aborts and the caller can fall back —
+            # a silent no-op reported as success is worse than a slow retry.
+            raise DriverError(f"open {target!r}: launch_app returned no pid ({res})")
+        self.target_pid = pid
+        await self.tool("bring_to_front", pid=pid)
         await asyncio.sleep(0.4)  # app settle
 
     @staticmethod
