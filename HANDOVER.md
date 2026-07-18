@@ -106,32 +106,43 @@ Next: port the AX *observation* mapping (driver `get_accessibility_tree` +
 the LLM tier can also run on the driver; then demo_learn uses DriverComputer
 for both tiers.
 
-## 5. THE OPEN GAP (do this next)
+## 5. THE TINY-MATCHER FINE-TUNE — DONE (2026-07-19)
 
-**Base LFM2.5-350M gets templates mostly right but fumbles slot extraction
-~1/3 of the time** (e.g. "launch spotify" → correct template `open_app` but
-copied an example's slot "safari" instead of "spotify"). This is exactly the
-research-predicted base-vs-fine-tuned gap. **The fix is a LoRA fine-tune**
-(distil-labs recipe: base 34–63% → 96–98% on this task shape, ~1–2k synthetic
-examples).
+The gap is CLOSED. LoRA fine-tune of LFM2.5-350M, trained locally on the M5
+with mlx-lm (~25 min), evaluated through the REAL serving path (llama-server +
+JSON-schema constrained decoding) on a 387-example held-out test set:
 
-Plan for the fine-tune:
-1. **Generate synthetic data** with a big model (use Groq — we have the key):
-   for each template, ~50–100 phrasing variations paired with correct
-   `{template, slots}` labels. Include hard negatives → `"none"`.
-2. **LoRA-tune** LFM2.5-350M (unsloth or mlx-lm; ~1hr on a single modern GPU —
-   the user has cloud machines, offered them).
-3. **Drop the adapter into `tiny.py`** — the interface doesn't change; point
-   `llama-server` at the merged/adapter GGUF.
+| metric                | base  | tuned |
+|-----------------------|-------|-------|
+| e2e correct           | 47.3% | 93.3% |
+| template acc (pos)    | 64.0% | 97.5% |
+| slot exact (given t)  | 72.9% | 97.7% |
+| none recall           | 50.0% | 84.3% |
+| wrong-match on none   | 50.0% | 15.7% |
+| p50 latency           | 104ms |  98ms |
 
-User has offered **cloud GPUs + online services** for training/generation — use
-them for step 2; Groq for step 1 (cheap).
+Everything lives in the PRIVATE workspace `../axstream-train` (open-core: the
+model + dataset stay out of this repo): `templates.py` (40-template catalog),
+`generate.py` (OpenRouter/Groq synthetic gen + cross-family judge filter,
+2.6k examples), `evaluate.py` (real-path eval, `--url` to pick server),
+`lora_config.yaml` (r=32, ALL projections incl. conv `in_proj`, lr 1e-4).
+Tuned GGUF: `~/models/lfm25-350m-axstream-Q4_K_M.gguf` (serving on :8792).
+
+GOTCHA for retrains: `mlx_lm fuse` writes the LFM2 short-conv kernels in MLX
+Conv1d layout `(out, k, 1)`; llama.cpp expects HF `(out, 1, k)` and asserts at
+load. Fix: restore `conv.conv.weight` tensors from the original HF snapshot
+before `convert_hf_to_gguf.py` (LoRA never touches them).
+
+Residual weak spots (test failures): `none` vs `open_url`/`open_folder`
+confusion on entity-like utterances, occasional verbatim-copy artifacts
+("quit out of spotify" → slot "out of spotify"). The `wrong_match_on_none`
+15.7% is why replay guards + risk gating stay mandatory.
 
 ## 6. How to run things
 
 ```sh
-# tiny matcher (required for zoxide tier)
-llama-server -m ~/models/LFM2.5-350M-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
+# tiny matcher (required for zoxide tier) — use the TUNED model (93% e2e vs 47% base)
+llama-server -m ~/models/lfm25-350m-axstream-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
 
 # computer-server (required for live execution) — needs Accessibility perms
 cd ../cua/libs/python/computer-server && uv run python -m computer_server --port 8765
