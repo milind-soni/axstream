@@ -8,19 +8,23 @@ stable prefix, so llama-server's prefix cache keeps prefill near-free.
 
 The matcher's contract is deliberately conservative: when unsure it answers
 "none", which routes the utterance to the LLM tier. A wrong "none" costs one
-slow call; a wrong match could perform a wrong action — so few-shot examples
-and (later) the LoRA fine-tune optimize recall, while the schema guarantees
-validity.
+slow call; a wrong match could perform a wrong action — so the fine-tune and
+few-shot examples optimize recall, while the schema guarantees validity.
+
+Use a FINE-TUNED matcher model: the base LFM2.5-350M scores ~47% end-to-end on
+this task; a small LoRA fine-tune reaches ~93% at the same ~100ms latency.
+Point AXSTREAM_TINY_URL (or the url arg) at whichever llama-server hosts it.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Optional
 
 import httpx
 
-DEFAULT_URL = "http://localhost:8791"
+DEFAULT_URL = os.environ.get("AXSTREAM_TINY_URL", "http://localhost:8791")
 
 
 def build_schema(templates: list[dict]) -> dict:

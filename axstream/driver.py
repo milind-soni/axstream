@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from typing import Any, Optional
 
 DRIVER_BIN = os.path.expanduser("~/.local/bin/cua-driver")
@@ -45,7 +46,12 @@ class DriverComputer:
             self.binary, "call", _tool_name, json.dumps(args),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=30)
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise DriverError(f"{_tool_name}: timed out after 30s")
         text = out.decode().strip()
         if proc.returncode != 0:
             raise DriverError(f"{_tool_name}: {err.decode().strip() or text}")
@@ -71,38 +77,58 @@ class DriverComputer:
 
     @staticmethod
     def _extract_pid(res: dict) -> Optional[int]:
-        """launch_app reports the pid either as a field or in prose text
-        ('Launched TextEdit (pid 6821) ...')."""
+        """launch_app reports the pid as a field, in prose text
+        ('Launched TextEdit (pid 6821) ...'), or inside MCP content blocks."""
         if isinstance(res.get("pid"), int):
             return res["pid"]
-        import re
+        texts = [res.get("text", "")]
+        for block in res.get("content", []) or []:
+            if isinstance(block, dict):
+                texts.append(str(block.get("text", "")))
+        for t in texts:
+            m = re.search(r"pid[:\s]+(\d+)", t)
+            if m:
+                return int(m.group(1))
+        return None
 
-        m = re.search(r"pid[:\s]+(\d+)", res.get("text", ""))
-        return int(m.group(1)) if m else None
+    # spec/computer-server key names -> driver vocabulary
+    _KEYMAP = {"enter": "return", "esc": "escape", "arrowup": "up",
+               "arrowdown": "down", "arrowleft": "left", "arrowright": "right",
+               "command": "cmd", "alt": "option", "backspace": "delete"}
 
     async def type_text(self, text: str) -> None:
-        await self.tool("type_text", pid=self._pid(), text=text)
+        await self._pid_tool("type_text", text=text)
 
     async def key(self, keys: list[str]) -> None:
+        keys = [self._KEYMAP.get(k.lower(), k) for k in keys]
         if len(keys) == 1:
-            await self.tool("press_key", pid=self._pid(), key=keys[0])
+            await self._pid_tool("press_key", key=keys[0])
         else:
-            await self.tool("hotkey", pid=self._pid(), keys=keys)
+            await self._pid_tool("hotkey", keys=keys)
 
     async def scroll(self, direction: str, clicks: int = 1) -> None:
-        await self.tool("scroll", pid=self._pid(), direction=direction,
-                        amount=max(1, min(50, clicks)))
+        await self._pid_tool("scroll", direction=direction,
+                             amount=max(1, min(50, clicks)))
 
     async def click(self, x: float, y: float) -> None:
         await self.tool("click", x=int(x), y=int(y), scope="desktop")
 
     async def double_click(self, x: float, y: float) -> None:
-        await self.tool("double_click", pid=self._pid(), x=int(x), y=int(y))
+        # x/y are SCREEN coords on the driver's pixel path (unlike click, a
+        # pid is required here, but it does not make the coords window-local)
+        await self._pid_tool("double_click", x=int(x), y=int(y))
 
     async def move(self, x: float, y: float) -> None:
+        # moves the driver's overlay cursor, not the real pointer — visual only
         await self.tool("move_cursor", x=int(x), y=int(y))
 
-    def _pid(self) -> int:
+    async def _pid_tool(self, tool_name: str, **args: Any) -> dict:
+        """A tool call targeting the tracked pid; a failure drops the pid so
+        the next action fails fast at `open` instead of deep in a replay."""
         if self.target_pid is None:
             raise DriverError("no target app — an `open` must run before key/type")
-        return self.target_pid
+        try:
+            return await self.tool(tool_name, pid=self.target_pid, **args)
+        except DriverError:
+            self.target_pid = None
+            raise

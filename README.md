@@ -1,12 +1,11 @@
 # axstream
 
-**A streaming action language for computer-use agents.** An LLM streams
-actions one JSON object per line; the executor performs each action the moment
-its newline arrives — while the model is still generating. The newline is the
-commit signal, so a half-generated action can never fire, and execution
-overlaps generation instead of waiting for the full response.
+**A streaming action language for computer-use agents.** An LLM emits actions
+as JSONL — one JSON object per line — and the executor performs each action
+the moment its newline arrives, while the model is still generating. The
+newline is the commit signal: a half-generated action can never fire.
 
-**→ [Read the spec: SPEC.md](SPEC.md)** (axstream-spec 0.1)
+**→ [Read the spec: SPEC.md](SPEC.md)** (axstream-spec 0.1) · **→ [Docs: axstream.dev](https://axstream.dev)**
 
 ```spec
 {"op":"act","do":"open","target":"Notes"}
@@ -15,69 +14,79 @@ overlaps generation instead of waiting for the full response.
 {"op":"done","status":"success"}
 ```
 
-This repo holds the spec plus a reference implementation: the newline-committed
-stream compiler ([compiler.py](axstream/compiler.py)), the action catalog
-([spec.py](axstream/spec.py)), an accessibility-tree-first observer, and a
-pipelined executor that drives [cua](https://github.com/trycua/cua)'s
-`computer-server`.
-
 ## Why
 
-Today's computer-use loops wait for the full model response, act once, sleep,
-screenshot, and re-prompt — every step pays full decode + screenshot prefill.
-axstream overlaps execution with decode and only re-observes at explicit
-`observe` barriers, so a burst of N actions costs ~max(decode, execution)
-instead of N × (decode + observe).
+Today's computer-use loops wait for the full model response, act once,
+screenshot, and re-prompt — every step pays full decode plus observation.
+axstream reads the **accessibility tree** (text, ~150ms scoped) instead of
+pixels, overlaps execution with decode, and only re-observes at explicit
+`observe` barriers. A burst of N actions costs ~max(decode, execution) instead
+of N × (decode + observe).
 
-## Run the dry demo (no keys, no server)
+Measured on the reference implementation: streaming execution saves **37%
+wall-clock** vs wait-then-act; a full plan from a fast LLM lands in **~0.4s**;
+a learned command replays in **~100ms with no LLM** at **93% end-to-end
+accuracy** (fine-tuned 350M matcher, held-out eval).
+
+## Three speeds, one language
+
+- **Instant** — commands you've used before replay directly (frecency-ranked,
+  slot-parameterized, guarded against the live screen). No LLM.
+- **Fast** — novel commands streamed by an LLM over the AX tree. Every success
+  is captured into the instant tier.
+- **Fallback** — AX-dead apps via computer use.
+
+## Run it
 
 ```sh
+# dry demo — no keys, no server; proves the streaming overlap
 uv run --with pytest python demo_dry.py
+
+# live streaming (macOS) — needs cua's computer-server + an LLM key
+cd ../cua/libs/python/computer-server && uv run python -m computer_server --port 8765
+export GROQ_API_KEY=...
+uv run python demo_live.py --task "open TextEdit and type hello world" --uri ws://localhost:8765/ws
+
+# learn-and-replay (the instant tier) — also needs a tiny matcher on :8791
+llama-server -m <matcher>.gguf --port 8791 -ngl 99 -c 4096 --no-webui
+uv run python demo_learn.py
+
+# tests
+uv run pytest
 ```
 
-Prints a timeline showing actions executing mid-stream and the streamed-vs-
-buffered comparison.
+Use a **fine-tuned** matcher for the instant tier (base LFM2.5-350M ≈47% e2e
+vs ≈93% tuned; misses fall back to the LLM tier). `AXSTREAM_TINY_URL`
+overrides the matcher endpoint.
 
-## Run live (macOS)
+## Spec properties
 
-1. Start cua's computer-server on the host (needs Accessibility + Screen
-   Recording permissions for the terminal):
-
-   ```sh
-   cd ../cua/libs/python/computer-server
-   uv run python -m computer_server   # ws://localhost:8000/ws
-   ```
-
-2. In another terminal:
-
-   ```sh
-   export ANTHROPIC_API_KEY=...
-   uv run python demo_live.py --task "open TextEdit and type hello world"
-   ```
-
-## Spec v0
-
-See [axstream/spec.py](axstream/spec.py) for the op catalog and
-[axstream/prompt.py](axstream/prompt.py) for the exact contract given to the
-model. Key properties:
-
-- **Line = commit unit.** A half-generated action can never execute
-  (truncation-safe by construction).
-- **No dedup.** Unlike json-render's idempotent patches, identical action
-  lines are both executed — repetition is meaningful.
+- **Line = commit unit.** Truncation-safe by construction.
+- **No dedup.** Identical lines both execute — repetition is meaningful.
 - **Late binding.** `{"ax":{"role":"AXButton","title":"Save"}}` resolves
-  against the live tree right before the click, so plans survive small screen
-  changes; `assert` + `observe` bound the speculation horizon.
-- **Risk classes.** `"risk":"risky"` marks hard-to-undo actions; policy can
-  block or gate them (`--no-risky`).
+  against the live tree right before the click; `assert` + `observe` bound the
+  speculation horizon.
+- **Risk classes.** `"risk":"risky"` marks hard-to-undo actions; policy gates
+  them (`--no-risky`).
 
-## Tests
+## Layout
 
-```sh
-uv run pytest
+```
+SPEC.md              the canonical action language (CC BY 4.0)
+axstream/
+  compiler.py        newline-committed stream compiler
+  executor.py        pipelined executor + zoxide-tier replay
+  ax.py              AX-tree observation, terse summaries, fuzzy resolve
+  computer.py        computer-server WebSocket client (+ MockComputer)
+  driver.py          cua-driver backend (background, pid-addressed delivery)
+  macros.py          frecency-ranked parameterized macro store
+  tiny.py            local tiny-model matcher (schema-constrained)
+  capture.py         parameterize a successful run into a macro
+  llm.py / prompt.py / runner.py / spec.py
+demo_*.py            dry / live / learn / replay demos
+docs/                axstream.dev (Fumadocs)
 ```
 
 ## License
 
-Reference implementation: MIT (see [LICENSE](LICENSE)).
-The spec ([SPEC.md](SPEC.md)) is CC BY 4.0.
+Reference implementation: MIT ([LICENSE](LICENSE)). Spec: CC BY 4.0.

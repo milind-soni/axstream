@@ -1,42 +1,37 @@
 ---
 title: Roadmap
-description: Where this is going — an open macOS accessibility-tree action model, an open-core dataset, and speech to action.
+description: What's shipped, what's next.
 ---
 
-<Callout title="Forward-looking">
-Everything on this page is **future direction**, not shipped behavior. The
-canonical, implemented surface is [the spec](/docs/spec) and the reference
-implementation. Treat the items below as intent, subject to change.
-</Callout>
+## Shipped
 
-axstream today is a spec plus a reference implementation: a streaming action
-language and a runtime that drives a live macOS machine through the
-accessibility tree. The direction from here:
+- **The spec + streaming runtime** — newline-committed compiler, pipelined
+  executor, accessibility-tree observation (~150ms scoped). Streaming execution
+  saves ~37% wall-clock vs wait-then-act.
+- **The instant tier** — learned commands replay with no LLM: a local 350M
+  matcher resolves utterance → macro + slots in ~100ms at 93% end-to-end
+  accuracy (fine-tuned), guarded against the live screen, with frecency
+  ranking. A failed match falls back to the LLM tier.
+- **Two execution backends** — cua's `computer-server` (WebSocket), and
+  `cua-driver` (MCP) for background, pid-addressed delivery with no focus
+  stealing.
 
-## An open macOS accessibility-tree action model
+## Next
 
-The reference stack already produces the two halves of a training signal:
-**terse accessibility-tree observations** and **streamed action bursts** that
-were actually executed against a live machine. The aim is an open action model
-specialized for driving macOS from the AX tree — small enough to emit the format
-reliably, and grounded in real accessibility structure rather than pixels.
-
-## An open-core dataset
-
-Paired *(observation, action-stream, outcome)* traces are the raw material for
-that model. The intent is to grow and release such a dataset **open-core** — an
-open corpus of accessibility-tree-grounded computer-use behavior — so the action
-model and the format can improve together in the open.
-
-## Speech → action
-
-With a fast, streamable action language in place, the natural front end is
-**speech**: a spoken instruction transcribed and turned directly into a streamed
-action burst, executing as the words are still being understood. The
-newline-commit model is a good fit for that low-latency, incremental path.
+- **Driver-native observation** — map the driver's window state into the
+  observer so both tiers run over the background-delivery backend.
+- **Guard coverage** — replay safety against UI drift: prefer late-bound
+  role/title targets over coordinates, `assert` before anything
+  `risk:risky`.
+- **Voice front-end** — streaming STT feeding tasks in, with eager execution
+  on stable partials: scaffolding runs while you're still speaking; anything
+  irreversible waits for the end of the utterance.
+- **A trained action model** — a small model fine-tuned to drive macOS from
+  accessibility-tree text, replacing the hosted LLM in the fast tier. The
+  spec + runtime stay open (MIT / CC BY 4.0); trained models and datasets are
+  developed separately.
 
 ---
 
-If you want to shape any of this, start from [the spec](/docs/spec) — the
-format is versioned so it can evolve additively without breaking existing
-runtimes.
+The format is versioned and evolves additively — start from
+[the spec](/docs/spec).

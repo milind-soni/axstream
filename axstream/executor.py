@@ -245,8 +245,13 @@ class Executor:
         return center
 
     async def _refresh_and_resolve(self, ax: dict):
-        """Late-binding fallback: re-fetch the live tree once and retry."""
-        state = await self.computer.ax_tree()
+        """Late-binding fallback: re-fetch the live tree once and retry.
+        Backends without observation (or a failed fetch) resolve to None so a
+        guard miss degrades to guard_failed/LLM-fallback, never a crash."""
+        try:
+            state = await self.computer.ax_tree()
+        except Exception:  # noqa: BLE001 - includes AttributeError on ax_tree-less backends
+            return None
         self.snapshot = Snapshot(state)
         # ids are only stable within the burst's original snapshot
         if ax.get("id") and not (ax.get("role") or ax.get("title")):

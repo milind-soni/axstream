@@ -1,97 +1,91 @@
 ---
 title: Quickstart
-description: Install the reference implementation, run the no-keys demo, then drive a live machine.
+description: Run the no-keys demo, then drive a live machine.
 ---
 
-The repository ships a reference implementation in Python: the newline-committed
-stream compiler, the action catalog, an accessibility-tree observer, and a
-pipelined executor. You can see the core thesis with **no API keys and no
-server** first, then wire it up to a live macOS machine.
+The repo ships a reference implementation in Python: the newline-committed
+stream compiler, action catalog, accessibility-tree observer, and pipelined
+executor. Manage the environment with
+[uv](https://docs.astral.sh/uv/).
 
-## 1. Get the reference implementation
-
-Clone the repo and let [uv](https://docs.astral.sh/uv/) manage the environment.
-The package lives at the repo root as `axstream/`.
-
-```sh
-git clone https://github.com/trycua/cua ../cua   # only needed for the live path
-```
-
-The reference impl has no required dependencies for the dry run beyond what
-`uv` resolves from `pyproject.toml`.
-
-## 2. Run the dry demo (no keys, no server)
+## 1. Dry demo — no keys, no server
 
 ```sh
 uv run --with pytest python demo_dry.py
 ```
 
-This replays a canned LLM response at a realistic decode speed into the **real**
-compiler and executor, driving a `MockComputer`. It prints a timeline showing
-actions executing mid-stream, then compares the streamed total against a
-buffered baseline (wait for the full response, then act):
+Replays a canned LLM response at realistic decode speed into the real compiler
+and executor against a mock computer. It prints a timeline of actions executing
+mid-stream, then compares streamed total vs a buffered baseline (wait for the
+full response, then act) — typically ~37% saved.
 
-```text
---- streamed vs buffered ---
-decode time (full response):     ...s
-pure execution time:             ...s
-buffered baseline (decode+exec): ...s
-streamed total (this run):       ...s
-saved:                           ...s (…%)
-```
+## 2. Live streaming (macOS)
 
-No network, no keys, no permissions. It exists to prove that actions execute
-while the model is still "generating," and that the overlap is real.
-
-## 3. Run live (macOS)
-
-The live path drives [cua](https://github.com/trycua/cua)'s `computer-server`,
-which performs the actual clicks and exposes the accessibility tree.
+The live path drives [cua](https://github.com/trycua/cua)'s `computer-server`
+for clicks, keys, and the accessibility tree.
 
 <Steps>
 
 <Step>
 
-### Start cua's computer-server
+### Start computer-server
 
-Grant the terminal **Accessibility** and **Screen Recording** permissions
-first.
+Grant your terminal **Accessibility** permission first.
 
 ```sh
+git clone https://github.com/trycua/cua ../cua
 cd ../cua/libs/python/computer-server
-uv run python -m computer_server   # ws://localhost:8000/ws
+uv run python -m computer_server --port 8765
 ```
 
 </Step>
 
 <Step>
 
-### Run a task against it
-
-In another terminal, set an API key and give it a task:
+### Stream a task
 
 ```sh
-export ANTHROPIC_API_KEY=...
-uv run python demo_live.py --task "open TextEdit and type hello world"
+export GROQ_API_KEY=...   # or ANTHROPIC_API_KEY with --provider anthropic
+uv run python demo_live.py --task "open TextEdit and type hello world" \
+  --uri ws://localhost:8765/ws
 ```
 
-`demo_live.py` also accepts `--provider` (anthropic / openai / groq),
-`--model`, `--max-bursts`, and `--no-risky` to block actions marked
-`risk:risky` instead of executing them.
+Flags: `--provider` (groq / anthropic / openai), `--model`, `--max-bursts`,
+`--no-risky` to block actions marked `risk:risky`.
 
 </Step>
 
 </Steps>
 
-## 4. Run the tests
+## 3. Learn-and-replay (the instant tier)
+
+`demo_learn.py` shows the three-speed system: the first time you type a
+command, an LLM plans and executes it (~0.5–1s) and the run is captured as a
+parameterized macro; from then on, a local 350M matcher replays it in ~100ms
+with no LLM — including slot variations ("titled standup" → "titled yoyo").
+
+Extra prereq — a tiny matcher on `:8791` (or set `AXSTREAM_TINY_URL`):
+
+```sh
+llama-server -m <matcher>.gguf --port 8791 -ngl 99 -c 4096 --no-webui
+uv run python demo_learn.py
+```
+
+<Callout title="Use a fine-tuned matcher">
+The base LFM2.5-350M scores ~47% end-to-end on match + slot extraction; a
+small LoRA fine-tune (~2.5k synthetic examples, under an hour on Apple
+Silicon) reaches ~93% at the same ~100ms. Misses are safe — a failed match
+falls back to the LLM tier — but the instant tier only feels instant with a
+tuned matcher.
+</Callout>
+
+## 4. Tests
 
 ```sh
 uv run pytest
 ```
 
-## Where to go next
-
 <Cards>
   <Card title="The Spec" href="/docs/spec" description="The canonical wire format and execution contract." />
-  <Card title="Roadmap" href="/docs/roadmap" description="Where axstream is going: an open action model and speech-to-action." />
+  <Card title="Roadmap" href="/docs/roadmap" description="What's shipped, what's next." />
 </Cards>

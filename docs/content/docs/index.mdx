@@ -5,38 +5,24 @@ description: Voice to action, as fast as dictation.
 
 ## Voice to action, as fast as dictation
 
-Dictation feels instant — you speak, and words appear as fast as you talk.
-**Voice to action** should feel the same: you say *"reply to Lawrence, I'll see
-him tomorrow,"* and it just happens, at the speed of speech.
+You say *"reply to Lawrence, I'll see him tomorrow"* — and it happens at the
+speed of speech. That's the goal. Today's voice control lags because of three
+things, and each has a fix:
 
-It doesn't today. The lag is what makes voice control feel like a toy instead of
-a superpower. But that latency isn't fundamental — it comes from three specific
-places, and each one has a fix.
-
-## Where the latency actually lives
-
-**1. Vision models.** Most computer-use agents look at *pixels* — they
-screenshot the screen and ask a vision model where to click. That is slow and
-expensive. But your computer already exposes a **structured, text description of
-every button and field**: the accessibility tree. Reading text is far faster
-than looking at an image. Drop vision; read the tree.
-
-**2. Waiting for the model to finish thinking.** Agents send the screen to a
-model, wait for the *entire* response, perform one action, then repeat. But
-models already **stream** their output token by token — so instead of waiting
-for the whole plan, we stream the **actions themselves** and perform each one the
-moment it arrives, while the model is still generating.
-
-**3. Figuring out what you meant.** *"Message Agni I'll see him tomorrow"* —
-which app? who is Agni? what tone? Resolving that context is the real latency
-killer, and calling a model every time is the slow way to do it. The fast way:
-**most of what you do, you have done before.** Learn it once, and next time skip
-the thinking entirely.
+1. **Vision models.** Agents screenshot the screen and ask a vision model where
+   to click. Your computer already exposes every button and field as text — the
+   accessibility tree. Reading text beats looking at pixels.
+2. **Waiting for the full response.** Models stream token by token, yet agents
+   wait for the whole plan before acting. Stream the *actions* instead, and
+   execute each one the moment it arrives.
+3. **Figuring out what you meant.** Which app? Who's Lawrence? This is the real
+   latency killer — and most of what you do, you've done before. Learn it once;
+   next time, skip the model entirely.
 
 ## The idea
 
-axstream is a small structured language — one action per line — that a model can
-stream, a runtime can replay, and a person can read:
+axstream is a small structured language — one action per line — that a model
+can stream, a runtime can replay, and a person can read:
 
 ```spec
 {"op":"act","do":"open","target":"Notes"}
@@ -45,28 +31,39 @@ stream, a runtime can replay, and a person can read:
 {"op":"done","status":"success"}
 ```
 
-Each line executes the instant its newline arrives — the `open` fires before the
-model has finished generating the `type` below it. One action either arrives as a
-whole, valid line or it does not execute at all, so streaming is safe by
-construction.
+Each line executes the instant its newline arrives — the `open` fires while the
+model is still generating the `type`. A line either arrives whole and valid or
+it doesn't execute, so streaming is safe by construction.
 
-That one language is the center of a system with **three speeds**:
+One language, three speeds:
 
-- **Instant** — actions you have done before replay directly, ranked by how often
-  and how recently you use them, with no model in the loop. (The trick
-  [zoxide](https://github.com/ajeetdsouza/zoxide) uses to jump you to a directory
-  before you finish typing — applied to actions.)
-- **Fast** — novel actions are streamed by a small, quick model as JSONL over the
-  accessibility tree, executing as the lines arrive.
-- **Fallback** — for the long tail of apps with no clean integration, drive them
-  through computer use.
+- **Instant** — commands you've used before replay directly, ranked by
+  frequency and recency ([zoxide](https://github.com/ajeetdsouza/zoxide)'s
+  trick, applied to actions). A local 350M model matches your words to a
+  learned command in ~100ms. No LLM in the loop.
+- **Fast** — novel commands are planned by a streaming LLM over the
+  accessibility tree, executing as lines arrive. Every success is captured into
+  the instant tier — the system gets faster the more you use it.
+- **Fallback** — apps with no clean accessibility surface get driven by
+  computer use.
 
-The format is model-agnostic and transport-agnostic: any LLM that can stream text
-can produce it, any runtime that can parse a line can perform it. No
-provider-specific tool-calling machinery to adopt.
+## Measured, not promised
+
+From the reference implementation, on a live macOS machine:
+
+| stage | measured |
+|---|---|
+| Scoped accessibility-tree observation | ~150ms |
+| Full plan from a fast LLM (Groq, one burst) | ~0.4s |
+| Streaming execution vs wait-then-act | 37% wall-clock saved |
+| Instant tier: match a spoken command | ~100ms |
+| Instant-tier accuracy (fine-tuned 350M matcher) | 93% end-to-end |
+
+The format is model-agnostic and transport-agnostic: any LLM that can stream
+text can produce it; any runtime that can parse a line can perform it.
 
 <Cards>
-  <Card title="The Spec" href="/docs/spec" description="The action language: wire format, actions, and execution contract." />
-  <Card title="Quickstart" href="/docs/quickstart" description="Run it against a live machine in a couple of minutes." />
-  <Card title="Roadmap" href="/docs/roadmap" description="The three-speed vision, a learned action library, and speech to action." />
+  <Card title="The Spec" href="/docs/spec" description="The action language: wire format, actions, execution contract." />
+  <Card title="Quickstart" href="/docs/quickstart" description="See it run in two minutes, no keys required." />
+  <Card title="Roadmap" href="/docs/roadmap" description="What's shipped, what's next." />
 </Cards>

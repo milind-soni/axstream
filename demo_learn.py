@@ -12,7 +12,9 @@ contrast is visible. Slots mean variations work: "title it yoyo" replays the
 
 Prereqs:
   1. computer-server:  cd ../cua/libs/python/computer-server && uv run python -m computer_server --port 8765
-  2. tiny model:       llama-server -m ~/models/LFM2.5-350M-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096
+  2. tiny model:       llama-server -m <your-matcher>.gguf --port 8791 -ngl 99 -c 4096
+     (use a FINE-TUNED matcher — base LFM2.5-350M ≈47% e2e vs ≈93% tuned;
+      or set AXSTREAM_TINY_URL to point elsewhere)
   3. GROQ_API_KEY in .env
 
 Usage:  uv run python demo_learn.py
