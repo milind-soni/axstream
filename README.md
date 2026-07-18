@@ -7,7 +7,9 @@ is accessibility-tree-first (terse text, cheap prefill, fast models), with
 element targets late-bound against the live tree at execution time.
 
 Execution backend: [cua](https://github.com/trycua/cua)'s `computer-server`,
-driven over one persistent WebSocket.
+driven over one persistent WebSocket. The core here is the spec, the
+newline-committed stream compiler, and the pipelined executor — the reusable
+foundation for a trained macOS-AX action model.
 
 ## Why
 

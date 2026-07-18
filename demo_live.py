@@ -16,7 +16,22 @@ import os
 from axstream.computer import Computer
 from axstream.llm import stream_anthropic, stream_openai_compat
 from axstream.runner import run_task
-from demo_voice import load_env_keys
+
+
+def load_env_keys() -> None:
+    """Load API keys from a sibling .env (KEY=VALUE lines); CLAUDE_API aliases
+    to ANTHROPIC_API_KEY."""
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if not os.path.exists(env_path):
+        return
+    for line in open(env_path):
+        if "=" in line:
+            k, v = line.split("=", 1)
+            k, v = k.strip(), v.strip().strip("'\"")
+            if k == "CLAUDE_API":
+                k = "ANTHROPIC_API_KEY"
+            if k and v and k not in os.environ:
+                os.environ[k] = v
 
 
 async def main() -> None:
