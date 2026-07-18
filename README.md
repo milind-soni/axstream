@@ -59,6 +59,28 @@ Use a **fine-tuned** matcher for the instant tier (base LFM2.5-350M ≈47% e2e
 vs ≈93% tuned; misses fall back to the LLM tier). `AXSTREAM_TINY_URL`
 overrides the matcher endpoint.
 
+## Integrate your STT
+
+You own audio → text; axstream owns text → action. Send the final utterance,
+get an executed action or a fast explicit refusal to route to your fallback:
+
+```python
+from axstream import Session
+
+session = await Session().connect()
+result = await session.handle("launch safari")
+# {"tier": "instant", "template": "open_app", "slots": {"app": "safari"}, "status": "done", ...}
+```
+
+Or as a pipe (no Python on your side): `your-stt | python -m axstream --stdin`.
+Verify setup with `python -m axstream --doctor`. Full contract:
+[axstream.dev/docs/integrate](https://axstream.dev/docs/integrate).
+
+axstream does **not** bundle its executor or model server — they're pluggable
+local processes (cua-driver / computer-server / your own `Computer`-shaped
+backend; any OpenAI-compatible server for the matcher). `--doctor` tells you
+what's missing and how to install it.
+
 ## Spec properties
 
 - **Line = commit unit.** Truncation-safe by construction.

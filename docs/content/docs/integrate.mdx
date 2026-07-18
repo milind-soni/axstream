@@ -1,0 +1,84 @@
+---
+title: Integrate your STT
+description: You own audio → text. axstream owns text → action.
+---
+
+If you build a dictation or voice product (Wispr Flow, Willow Voice, or your
+own STT stack), the seam is one string: send axstream the **final transcribed
+utterance**, get back an executed action — or a fast, explicit "not mine" you
+can route to your own fallback.
+
+```
+your app:   audio ──▶ STT ──▶ "launch safari"
+axstream:                      └─▶ match (~100ms, local 350M) ─▶ replay ─▶ result
+```
+
+No audio ever reaches axstream. Everything below runs locally.
+
+## Five lines of Python
+
+```python
+from axstream import Session
+
+session = await Session().connect()
+result = await session.handle("launch safari")
+# {"tier": "instant", "template": "open_app", "slots": {"app": "safari"},
+#  "status": "done", "match_ms": 88, "total_ms": 1641}
+```
+
+## Or a pipe — no Python on your side
+
+One JSON result per line on stdout; feed utterances line by line on stdin:
+
+```sh
+your-stt --emit-finals | python -m axstream --stdin
+```
+
+```sh
+python -m axstream "launch safari"   # one-shot
+python -m axstream --doctor          # verify every prerequisite
+```
+
+## The contract
+
+- **Send final utterances**, one command per call. Lowercase/punctuation
+  don't matter; dictation artifacts are expected (the matcher is trained on
+  them).
+- **`tier: "instant"`** — a learned macro matched and replayed. `status` tells
+  you how it ended: `done`, `aborted` (an action failed — nothing was faked),
+  or `guard_failed` (the screen didn't look right; nothing ran).
+- **`tier: "none"`** (~100ms) — not a learned command. This is *deliberate*:
+  the matcher refuses rather than guesses. Route it to your fallback — show
+  the text as dictation, or run axstream's LLM tier (`runner.run_task`) and
+  `session.learn()` the success so it's instant next time.
+- Slot values are copied verbatim from the utterance and machine-verified —
+  the matcher cannot act on words the user didn't say.
+- `handle()` never raises on action failure; the result reports it.
+
+## What must be running (and what doesn't)
+
+axstream deliberately does **not** bundle its executor or model server —
+they're pluggable processes you point at. `python -m axstream --doctor`
+checks all of them:
+
+| piece | what it is | install |
+|---|---|---|
+| tiny matcher | any OpenAI-compatible server hosting a matcher model (llama-server recommended) | `llama-server -m <matcher>.gguf --port 8791 -ngl 99 -c 4096 --no-webui`; override with `AXSTREAM_TINY_URL` |
+| executor | [cua-driver](https://github.com/trycua/cua) — background, pid-addressed input delivery, no focus stealing | cua's installer; grant Accessibility once |
+| macro store | a JSON file of learned commands | created automatically at `~/.axstream/macros.json` |
+
+Use a **fine-tuned** matcher model: base LFM2.5-350M scores ~47% end-to-end;
+a small LoRA fine-tune reaches ~93% at the same ~100ms. A miss is always safe
+(it becomes `tier: "none"`), but the instant tier only feels magic when it
+matches.
+
+Prefer cua's `computer-server` instead of the driver? Pass any
+`Computer`-shaped backend: `Session(computer=Computer(uri="ws://..."))`. Tests
+use `MockComputer` — no permissions, no side effects.
+
+## Streaming partials (coming)
+
+Today's contract is final-utterance-in. The spec is built for eager execution
+on stable partials (act on reversible scaffolding while the user is still
+speaking; hold `risk:risky` actions for the end of utterance) — if you want to
+integrate at that depth, open an issue; the wire format is ready for it.
