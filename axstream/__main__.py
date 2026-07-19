@@ -213,7 +213,7 @@ async def _up(voice: bool) -> None:
         if voice:
             await _voice_loop(session)
         else:
-            print(f"{DIM}type a command ('quit' to stop){RESET}")
+            print(f"{DIM}type a command ('quit' to stop, ctrl-c cancels a running one){RESET}")
             while True:
                 try:
                     u = (await asyncio.to_thread(input, "» ")).strip()
@@ -221,7 +221,10 @@ async def _up(voice: bool) -> None:
                     break
                 if not u or u.lower() in ("quit", "exit"):
                     break
-                _print_result(await session.handle(u))
+                try:
+                    _print_result(await session.handle(u))
+                except KeyboardInterrupt:
+                    print(f"\n  {YELLOW}cancelled{RESET} — still listening\n")
     finally:
         await session.close()
 
@@ -237,16 +240,23 @@ async def _voice_loop(session) -> None:
     print(f"{DIM}loading local STT ...{RESET}")
     transcriber = load_transcriber()
     transcriber.transcribe(np.zeros(8000, dtype="float32"))
-    print(f"{DIM}listening — just speak, pause to commit ('quit' to stop){RESET}")
+    print(f"{DIM}listening — just speak, pause to commit "
+          f"('quit' to stop, ctrl-c cancels a running command){RESET}")
     while True:
-        text, timing = await listen_and_transcribe(transcriber)
+        try:
+            text, timing = await listen_and_transcribe(transcriber)
+        except KeyboardInterrupt:
+            break
         u = text.strip().lower().rstrip(".!?")
         if not u:
             continue
         print(f"» {u}  {DIM}stt {timing['transcribe_ms']:.0f}ms{RESET}")
         if u in ("quit", "exit", "stop"):
             break
-        _print_result(await session.handle(u))
+        try:
+            _print_result(await session.handle(u))
+        except KeyboardInterrupt:
+            print(f"\n  {YELLOW}cancelled{RESET} — still listening\n")
 
 
 def main() -> None:

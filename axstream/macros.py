@@ -71,8 +71,20 @@ class MacroStore:
             self.macros = {m["id"]: Macro(**m) for m in data}
 
     def save(self) -> None:
+        """Merge-on-save: another process (a second session, a seed run) may
+        have written since we loaded — union by id, our copies win — so a
+        stale session can never clobber macros it has never seen."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps([asdict(m) for m in self.macros.values()], indent=2))
+        merged: dict[str, Macro] = {}
+        if self.path.exists():
+            try:
+                disk = json.loads(self.path.read_text())
+                merged = {m["id"]: Macro(**m) for m in disk}
+            except (json.JSONDecodeError, TypeError):
+                pass
+        merged.update(self.macros)
+        self.macros = merged
+        self.path.write_text(json.dumps([asdict(m) for m in merged.values()], indent=2))
 
     def templates(self) -> list[dict]:
         """The matcher's view: id + description + slots + examples, ranked so

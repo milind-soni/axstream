@@ -66,6 +66,20 @@ def _default_llm() -> Optional[Callable]:
     return None
 
 
+_FILLERS = {"okay", "ok", "so", "um", "uh", "hmm", "yeah", "yes", "no", "hey",
+            "hi", "hello", "thanks", "thank", "you", "well", "right", "cool",
+            "like", "just", "please", "can", "could", "the", "a", "and", "then"}
+
+
+def _looks_like_command(utterance: str) -> bool:
+    """Cheap gate before waking the LLM tier: fragments and small talk
+    ("okay, so", "hmm", "hello") must not reach a planner that owns the mouse.
+    Anything with real content words passes; the planner still decides."""
+    words = re.findall(r"[a-z0-9'.]+", utterance.lower())
+    content = [w for w in words if w not in _FILLERS]
+    return len(content) >= 2 or (len(content) == 1 and len(words) <= 2)
+
+
 def _op_line(op: dict) -> str:
     """One terse line per spec action, placeholders and all."""
     do = op.get("do", op.get("op"))
@@ -170,7 +184,7 @@ class Session:
         hit = self.tiny.match(utterance, self._library(utterance)) if utterance else None
         match_ms = (time.perf_counter() - t0) * 1000
         if not hit:
-            if self.llm and utterance:
+            if self.llm and utterance and _looks_like_command(utterance):
                 return await self._fast_tier(utterance, t0, match_ms)
             return {"tier": "none", "match_ms": round(match_ms), "total_ms": round(match_ms)}
 
@@ -217,7 +231,9 @@ class Session:
                                  allow_risky=self.allow_risky,
                                  verbose=self.verbose, on_event=collect)
         status = results[-1].status if results else "aborted"
-        learning = bool(executed) and status in ("done", "observe")
+        # learn ONLY from clean success: a run that hit the burst limit
+        # ("observe") or aborted must never become a macro
+        learning = bool(executed) and status == "done"
         if learning:
             # learning happens OFF the hot path — the user's task is already
             # done; parameterization is a second LLM call they shouldn't wait on
