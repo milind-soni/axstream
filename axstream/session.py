@@ -121,7 +121,10 @@ class Session:
         none) so the caller can decide whether to fall back."""
         t0 = time.perf_counter()
         utterance = utterance.strip()
-        hit = self.tiny.match(utterance, self.store.templates()) if utterance else None
+        # top-N by frecency keeps the matcher prompt near its trained library
+        # size; colder macros fall to the LLM tier, which re-learns/warms them
+        templates = self.store.templates()[:25]
+        hit = self.tiny.match(utterance, templates) if utterance else None
         match_ms = (time.perf_counter() - t0) * 1000
         if not hit:
             if self.llm and utterance:

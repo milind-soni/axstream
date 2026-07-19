@@ -178,9 +178,17 @@ class DriverComputer:
 
     async def _pid_tool(self, tool_name: str, **args: Any) -> dict:
         """A tool call targeting the tracked pid; a failure drops the pid so
-        the next action fails fast at `open` instead of deep in a replay."""
+        the next action fails fast at `open` instead of deep in a replay.
+        With no tracked pid, targets the frontmost app — this is what makes
+        context-free macros ("copy that", "select all") act on whatever app
+        the user is in."""
         if self.target_pid is None:
-            raise DriverError("no target app — an `open` must run before key/type")
+            apps = await self.tool("list_apps")
+            active = [a for a in apps.get("apps", [])
+                      if a.get("active") and a.get("running")]
+            if not active:
+                raise DriverError("no target app — nothing frontmost and no `open` ran")
+            self.target_pid = active[0]["pid"]
         try:
             return await self.tool(tool_name, pid=self.target_pid, **args)
         except DriverError:

@@ -264,6 +264,17 @@ def main() -> None:
 
     if args.doctor:
         sys.exit(doctor())
+    if args.utterance == "seed":
+        from .macros import MacroStore
+        from .starter import STARTER
+
+        store = MacroStore()
+        before = len(store.macros)
+        for m in STARTER:
+            store.add(m)
+        print(f"seeded {len(store.macros) - before} starter macros "
+              f"({len(store.macros)} total) -> {store.path}")
+        return
     if args.utterance == "up":
         asyncio.run(_up(voice=args.voice))
     elif args.stdin:
