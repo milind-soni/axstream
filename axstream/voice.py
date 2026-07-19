@@ -110,9 +110,13 @@ def record_push_to_talk() -> "tuple":
     return np.concatenate(chunks)[:, 0], seconds
 
 
-def record_hands_free(max_wait_s: float = 45.0, silence_s: float = 0.9) -> "tuple":
+def record_hands_free(max_wait_s: float = 45.0, silence_s: float = 0.9,
+                      max_utterance_s: float = 12.0) -> "tuple":
     """Blocking: wait for speech, record until ~silence_s of quiet, return
-    (audio, spoke_seconds). Ambient-adaptive RMS gate; (empty, 0) on timeout."""
+    (audio, spoke_seconds). Ambient-adaptive RMS gate; (empty, 0) on timeout.
+    max_utterance_s hard-caps a recording — if the room got louder than the
+    calibrated ambient (music, fans), the quiet-end never triggers and we'd
+    record forever; better to commit what we have."""
     import numpy as np
     import sounddevice as sd
 
@@ -143,8 +147,9 @@ def record_hands_free(max_wait_s: float = 45.0, silence_s: float = 0.9) -> "tupl
             else:
                 chunks.append(data)
                 quiet_blocks = quiet_blocks + 1 if rms < threshold else 0
-                if quiet_blocks * 0.1 >= silence_s:
-                    return np.concatenate(chunks), time.perf_counter() - started
+                spoke = time.perf_counter() - started
+                if quiet_blocks * 0.1 >= silence_s or spoke >= max_utterance_s:
+                    return np.concatenate(chunks), spoke
 
 
 async def listen_and_transcribe(transcriber: Transcriber) -> tuple[str, dict]:
