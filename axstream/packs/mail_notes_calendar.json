@@ -78,9 +78,9 @@
     }
    },
    {
-    "utterance": "new mail to milind",
+    "utterance": "new mail to dev",
     "slots": {
-     "recipient": "milind"
+     "recipient": "dev"
     }
    }
   ],
