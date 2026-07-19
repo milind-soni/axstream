@@ -65,17 +65,39 @@ def _default_llm() -> Optional[Callable]:
     return None
 
 
+def _op_line(op: dict) -> str:
+    """One terse line per spec action, placeholders and all."""
+    do = op.get("do", op.get("op"))
+    target = op.get("target")
+    if isinstance(target, dict) and "ax" in target:
+        ax = target["ax"]
+        target = f"{ax.get('role', '')} {ax.get('title') or ax.get('id') or ''!r}".strip()
+    detail = target or op.get("text") or op.get("keys") or op.get("ms") or ""
+    return f"{do} {detail}".strip()
+
+
+def _replay_printer(e: dict) -> None:
+    kind = e.get("kind")
+    if kind == "executed":
+        ms = (e["t_done"] - e["t_start"]) * 1000
+        print(f"    > {_op_line(e['op'])}  ({ms:.0f}ms)")
+    elif kind in ("guard_failed", "action_failed"):
+        print(f"    X {kind}: {e.get('error', e.get('guard', ''))}")
+
+
 class Session:
     def __init__(self, matcher_url: Optional[str] = None,
                  macros_path: str = "~/.axstream/macros.json",
                  computer: Any = None, allow_risky: bool = False,
-                 llm: Optional[Callable] = None, max_bursts: int = 4):
+                 llm: Optional[Callable] = None, max_bursts: int = 4,
+                 verbose: bool = False):
         self.store = MacroStore(path=macros_path)
         self.tiny = TinyMatcher(**({"url": matcher_url} if matcher_url else {}))
         self.computer = computer if computer is not None else DriverComputer()
         self.allow_risky = allow_risky
         self.llm = llm if llm is not None else _default_llm()
         self.max_bursts = max_bursts
+        self.verbose = verbose  # stream per-action logs to stdout as things run
 
     async def connect(self) -> "Session":
         await self.computer.connect()
@@ -107,7 +129,12 @@ class Session:
             return {"tier": "none", "match_ms": round(match_ms), "total_ms": round(match_ms)}
 
         plan = self.store.resolve(hit["template"], hit.get("slots", {}))
-        executor = Executor(self.computer, Snapshot({}), allow_risky=self.allow_risky)
+        if self.verbose:
+            print(f"  template [{hit['template']}] slots={hit.get('slots', {})}")
+            for op in plan["actions"]:
+                print(f"    {_op_line(op)}")
+        executor = Executor(self.computer, Snapshot({}), allow_risky=self.allow_risky,
+                            on_event=_replay_printer if self.verbose else None)
         result = await executor.replay(plan["actions"], plan.get("guard"))
         return {
             "tier": "instant",
@@ -131,10 +158,12 @@ class Session:
         results = await run_task(self.computer, utterance, self.llm,
                                  max_bursts=self.max_bursts,
                                  allow_risky=self.allow_risky,
-                                 verbose=False, on_event=collect)
+                                 verbose=self.verbose, on_event=collect)
         status = results[-1].status if results else "aborted"
         learned = None
         if executed and status in ("done", "observe"):
+            if self.verbose:
+                print("  parameterizing into a template ...")
             try:
                 macro_dict = await parameterize(utterance, debind(executed), self.llm)
             except Exception:  # noqa: BLE001 - learning is best-effort
@@ -145,6 +174,10 @@ class Session:
                                     ("id", "description", "slots", "examples",
                                      "actions", "guard")}))
                 learned = macro_dict["id"]
+                if self.verbose:
+                    print(f"  learned template [{learned}] slots={macro_dict['slots']}")
+                    for op in macro_dict["actions"]:
+                        print(f"    {_op_line(op)}")
         return {
             "tier": "fast",
             "status": status,

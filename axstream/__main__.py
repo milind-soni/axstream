@@ -204,7 +204,7 @@ async def _up(voice: bool) -> None:
         print("\nfix the above, or run `axstream --doctor` for details")
         sys.exit(1)
 
-    session = await Session().connect()
+    session = await Session(verbose=True).connect()
     ready = session.ready()
     fast = "on" if session.llm else "OFF (no OPENROUTER_API_KEY / GROQ_API_KEY)"
     print(f"  {GREEN}session{RESET} {DIM}{ready['macros']} macros · "
