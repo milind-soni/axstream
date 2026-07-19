@@ -40,7 +40,8 @@ async def run_task(
         t_obs = time.perf_counter()
         state = await computer.ax_tree()
         snapshot = Snapshot(state)
-        observation = snapshot.summarize()
+        # lean observation: enough to plan, cheap to prefill
+        observation = snapshot.summarize(max_elements=150)
         obs_ms = (time.perf_counter() - t_obs) * 1000
         if verbose:
             print(

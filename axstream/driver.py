@@ -64,6 +64,22 @@ class DriverComputer:
 
     async def open(self, target: str) -> None:
         is_url = "://" in target or target.startswith("www.")
+        if not is_url:
+            # already running? target + activate, skip the launch round-trip.
+            # (Also the ONLY path for system apps like Finder, which
+            # launch_app doesn't know but are always running.)
+            try:
+                apps = await self.tool("list_apps")
+                running = [a for a in apps.get("apps", [])
+                           if a.get("running") and a.get("pid")
+                           and (a.get("name") or "").lower() == target.lower()]
+                if running:
+                    self.target_pid = running[0]["pid"]
+                    await self.tool("bring_to_front", pid=self.target_pid)
+                    await asyncio.sleep(0.2)
+                    return
+            except DriverError:
+                pass  # fall through to a normal launch
         if is_url:
             url = target if "://" in target else f"https://{target}"
             res = await self.tool("launch_app", name="Safari", urls=[url])

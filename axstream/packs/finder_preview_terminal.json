@@ -1,0 +1,1560 @@
+[
+ {
+  "id": "finder_new_window",
+  "app": "Finder",
+  "description": "open a new finder window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "new finder window",
+    "slots": {}
+   },
+   {
+    "utterance": "open a finder window for me",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_new_tab",
+  "app": "Finder",
+  "description": "open a new tab in finder",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "new finder tab",
+    "slots": {}
+   },
+   {
+    "utterance": "open another tab in finder",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "t"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_new_folder",
+  "app": "Finder",
+  "description": "create a new folder in the current finder window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make a new folder here",
+    "slots": {}
+   },
+   {
+    "utterance": "create a folder in finder",
+    "slots": {}
+   },
+   {
+    "utterance": "new folder please",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_go_downloads",
+  "app": "Finder",
+  "description": "open the downloads folder in finder",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "uh open my downloads folder",
+    "slots": {}
+   },
+   {
+    "utterance": "go to downloads",
+    "slots": {}
+   },
+   {
+    "utterance": "show me my downloads",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "option",
+     "l"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_go_desktop",
+  "app": "Finder",
+  "description": "open the desktop folder in finder",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open my desktop folder",
+    "slots": {}
+   },
+   {
+    "utterance": "go to the desktop in finder",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_go_documents",
+  "app": "Finder",
+  "description": "open the documents folder in finder",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open my documents folder",
+    "slots": {}
+   },
+   {
+    "utterance": "take me to documents",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "o"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_go_applications",
+  "app": "Finder",
+  "description": "open the applications folder in finder",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open the applications folder",
+    "slots": {}
+   },
+   {
+    "utterance": "show me my apps in finder",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_go_home",
+  "app": "Finder",
+  "description": "open the home folder in finder",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "go to my home folder",
+    "slots": {}
+   },
+   {
+    "utterance": "open home in finder",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "h"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_go_airdrop",
+  "app": "Finder",
+  "description": "open the airdrop window in finder",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open airdrop",
+    "slots": {}
+   },
+   {
+    "utterance": "i want to airdrop something",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "r"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_go_to_folder",
+  "app": "Finder",
+  "description": "go to a specific folder path in finder",
+  "slots": [
+   "path"
+  ],
+  "examples": [
+   {
+    "utterance": "go to the folder ~/projects",
+    "slots": {
+     "path": "~/projects"
+    }
+   },
+   {
+    "utterance": "open ~/library/logs in finder",
+    "slots": {
+     "path": "~/library/logs"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "g"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{path}"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_search",
+  "app": "Finder",
+  "description": "search for files in finder",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search finder for tax documents",
+    "slots": {
+     "query": "tax documents"
+    }
+   },
+   {
+    "utterance": "find files named invoice",
+    "slots": {
+     "query": "invoice"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   }
+  ]
+ },
+ {
+  "id": "finder_quick_look",
+  "app": "Finder",
+  "description": "quick look preview of the selected file",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "quick look at this file",
+    "slots": {}
+   },
+   {
+    "utterance": "preview the selected file",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "space"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_get_info",
+  "app": "Finder",
+  "description": "show the get info panel for the selected item",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "get info on this file",
+    "slots": {}
+   },
+   {
+    "utterance": "show file info",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "i"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_duplicate",
+  "app": "Finder",
+  "description": "duplicate the selected file or folder",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "duplicate this file",
+    "slots": {}
+   },
+   {
+    "utterance": "make a copy of the selected file",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "finder_move_to_trash",
+  "app": "Finder",
+  "description": "move the selected item to the trash",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "move this to the trash",
+    "slots": {}
+   },
+   {
+    "utterance": "delete the selected file",
+    "slots": {}
+   },
+   {
+    "utterance": "trash it",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Finder"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "delete"
+    ],
+    "risk": "risky"
+   }
+  ]
+ },
+ {
+  "id": "preview_open_file",
+  "app": "Preview",
+  "description": "open a specific file in preview",
+  "slots": [
+   "path"
+  ],
+  "examples": [
+   {
+    "utterance": "open ~/desktop/scan.pdf in preview",
+    "slots": {
+     "path": "~/desktop/scan.pdf"
+    }
+   },
+   {
+    "utterance": "preview the file ~/downloads/receipt.jpg",
+    "slots": {
+     "path": "~/downloads/receipt.jpg"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "o"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "g"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{path}"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_rotate_left",
+  "app": "Preview",
+  "description": "rotate the current image or page left",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "rotate this left",
+    "slots": {}
+   },
+   {
+    "utterance": "rotate the image counterclockwise",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "l"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_rotate_right",
+  "app": "Preview",
+  "description": "rotate the current image or page right",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "rotate this right",
+    "slots": {}
+   },
+   {
+    "utterance": "rotate the picture clockwise",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "r"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_actual_size",
+  "app": "Preview",
+  "description": "zoom to actual size in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show actual size",
+    "slots": {}
+   },
+   {
+    "utterance": "reset the zoom in preview",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "0"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_zoom_to_fit",
+  "app": "Preview",
+  "description": "zoom to fit the window in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "zoom to fit",
+    "slots": {}
+   },
+   {
+    "utterance": "fit the page to the window",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "9"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_markup_toolbar",
+  "app": "Preview",
+  "description": "show the markup toolbar in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show the markup tools",
+    "slots": {}
+   },
+   {
+    "utterance": "i want to annotate this",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_inspector",
+  "app": "Preview",
+  "description": "show the inspector panel in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show the inspector",
+    "slots": {}
+   },
+   {
+    "utterance": "show info about this image",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "i"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_find",
+  "app": "Preview",
+  "description": "search for text in the current document",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search this pdf for invoice total",
+    "slots": {
+     "query": "invoice total"
+    }
+   },
+   {
+    "utterance": "find the word summary in this document",
+    "slots": {
+     "query": "summary"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_find_next",
+  "app": "Preview",
+  "description": "jump to the next search match in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "next match",
+    "slots": {}
+   },
+   {
+    "utterance": "find the next one",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "g"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_duplicate_document",
+  "app": "Preview",
+  "description": "duplicate the current document in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "duplicate this document",
+    "slots": {}
+   },
+   {
+    "utterance": "make a copy of this pdf",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "s"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_print",
+  "app": "Preview",
+  "description": "open the print dialog in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "print this document",
+    "slots": {}
+   },
+   {
+    "utterance": "open the print dialog",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "p"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_fullscreen",
+  "app": "Preview",
+  "description": "toggle full screen in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make preview full screen",
+    "slots": {}
+   },
+   {
+    "utterance": "go full screen",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "cmd",
+     "f"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_adjust_color",
+  "app": "Preview",
+  "description": "open the adjust color panel in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "adjust the colors on this image",
+    "slots": {}
+   },
+   {
+    "utterance": "open color adjustments",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "option",
+     "cmd",
+     "c"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_thumbnails",
+  "app": "Preview",
+  "description": "show the thumbnail sidebar in preview",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show the page thumbnails",
+    "slots": {}
+   },
+   {
+    "utterance": "show the sidebar with all the pages",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "option",
+     "cmd",
+     "2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "preview_close_window",
+  "app": "Preview",
+  "description": "close the current preview window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "close this preview window",
+    "slots": {}
+   },
+   {
+    "utterance": "close the document",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Preview"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "w"
+    ],
+    "risk": "risky"
+   }
+  ]
+ },
+ {
+  "id": "terminal_new_window",
+  "app": "Terminal",
+  "description": "open a new terminal window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open a new terminal",
+    "slots": {}
+   },
+   {
+    "utterance": "new terminal window please",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_new_tab",
+  "app": "Terminal",
+  "description": "open a new tab in terminal",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "new terminal tab",
+    "slots": {}
+   },
+   {
+    "utterance": "open another tab in the terminal",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "t"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_run_command",
+  "app": "Terminal",
+  "description": "type a command in terminal and run it",
+  "slots": [
+   "command"
+  ],
+  "examples": [
+   {
+    "utterance": "run git status in terminal",
+    "slots": {
+     "command": "git status"
+    }
+   },
+   {
+    "utterance": "type ls in the terminal and hit enter",
+    "slots": {
+     "command": "ls"
+    }
+   },
+   {
+    "utterance": "run npm run dev for me",
+    "slots": {
+     "command": "npm run dev"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{command}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ],
+    "risk": "risky"
+   }
+  ]
+ },
+ {
+  "id": "terminal_clear",
+  "app": "Terminal",
+  "description": "clear the terminal screen and scrollback",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "clear the terminal",
+    "slots": {}
+   },
+   {
+    "utterance": "clean up this terminal screen",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "k"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_interrupt",
+  "app": "Terminal",
+  "description": "send ctrl c to stop the running command",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "stop the running command",
+    "slots": {}
+   },
+   {
+    "utterance": "control c that",
+    "slots": {}
+   },
+   {
+    "utterance": "cancel whats running in terminal",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "c"
+    ],
+    "risk": "risky"
+   }
+  ]
+ },
+ {
+  "id": "terminal_next_tab",
+  "app": "Terminal",
+  "description": "switch to the next terminal tab",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "next terminal tab",
+    "slots": {}
+   },
+   {
+    "utterance": "switch to the next tab",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "tab"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_previous_tab",
+  "app": "Terminal",
+  "description": "switch to the previous terminal tab",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "previous terminal tab",
+    "slots": {}
+   },
+   {
+    "utterance": "go back a tab in terminal",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "shift",
+     "tab"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_split_pane",
+  "app": "Terminal",
+  "description": "split the terminal window into panes",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "split the terminal",
+    "slots": {}
+   },
+   {
+    "utterance": "split this pane",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_close_split",
+  "app": "Terminal",
+  "description": "close the current split pane in terminal",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "close this split pane",
+    "slots": {}
+   },
+   {
+    "utterance": "unsplit the terminal",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "shift",
+     "cmd",
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_find",
+  "app": "Terminal",
+  "description": "search the terminal output for text",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search the terminal for error",
+    "slots": {
+     "query": "error"
+    }
+   },
+   {
+    "utterance": "find permission denied in the output",
+    "slots": {
+     "query": "permission denied"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_line_start",
+  "app": "Terminal",
+  "description": "move the cursor to the start of the command line",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "go to the start of the line",
+    "slots": {}
+   },
+   {
+    "utterance": "jump to the beginning of this command",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_clear_line",
+  "app": "Terminal",
+  "description": "erase everything typed on the current command line",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "clear this line",
+    "slots": {}
+   },
+   {
+    "utterance": "erase what i typed",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "u"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "terminal_close_tab",
+  "app": "Terminal",
+  "description": "close the current terminal tab",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "close this terminal tab",
+    "slots": {}
+   },
+   {
+    "utterance": "close the terminal window",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Terminal"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "w"
+    ],
+    "risk": "risky"
+   }
+  ]
+ }
+]

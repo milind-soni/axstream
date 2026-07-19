@@ -184,10 +184,9 @@ def _print_result(res: dict) -> None:
               f"{DIM}{res['status']} · match {res['match_ms']}ms · "
               f"total {res['total_ms']}ms · no LLM{RESET}\n")
     elif tier == "fast":
-        learned = f" · learned '{res['learned']}' — say it again for instant" \
-            if res.get("learned") else ""
+        learning = " · learning it in the background" if res.get("learning") else ""
         print(f"  {YELLOW}🐢 fast{RESET} {res['actions']} actions · {res['status']} "
-              f"{DIM}· total {res['total_ms'] / 1000:.1f}s{learned}{RESET}\n")
+              f"{DIM}· total {res['total_ms'] / 1000:.1f}s{learning}{RESET}\n")
     else:
         print(f"  {DIM}not understood ({res['match_ms']}ms) — no macro matched "
               f"and no fast-tier LLM key configured{RESET}\n")
@@ -266,14 +265,17 @@ def main() -> None:
         sys.exit(doctor())
     if args.utterance == "seed":
         from .macros import MacroStore
+        from .packs import load_packs
         from .starter import STARTER
 
         store = MacroStore()
         before = len(store.macros)
-        for m in STARTER:
+        pack_macros, rejects = load_packs(verbose=True)
+        for m in STARTER + pack_macros:
             store.add(m)
-        print(f"seeded {len(store.macros) - before} starter macros "
-              f"({len(store.macros)} total) -> {store.path}")
+        print(f"seeded {len(store.macros) - before} macros "
+              f"({len(STARTER)} starter + {len(pack_macros)} from packs, "
+              f"{len(rejects)} rejected) -> {len(store.macros)} total at {store.path}")
         return
     if args.utterance == "up":
         asyncio.run(_up(voice=args.voice))

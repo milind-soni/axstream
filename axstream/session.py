@@ -28,6 +28,7 @@ Config (constructor args, env-overridable):
 from __future__ import annotations
 
 import os
+import re
 import time
 from typing import Any, Callable, Optional
 
@@ -98,15 +99,60 @@ class Session:
         self.llm = llm if llm is not None else _default_llm()
         self.max_bursts = max_bursts
         self.verbose = verbose  # stream per-action logs to stdout as things run
+        self._pending: set = set()  # background learn tasks
+        self._frontmost: Optional[str] = None  # cached frontmost app name
 
     async def connect(self) -> "Session":
         await self.computer.connect()
+        await self._refresh_frontmost()
         if self.tiny.available():
-            self.tiny.warm(self.store.templates())
+            self.tiny.warm(self._library())
         return self
 
     async def close(self) -> None:
+        if self._pending:  # let in-flight background learning persist first
+            import asyncio
+            await asyncio.gather(*self._pending, return_exceptions=True)
         await self.computer.close()
+
+    async def _refresh_frontmost(self) -> None:
+        """Best-effort cache of the frontmost app name (drives app-scoping)."""
+        if not hasattr(self.computer, "tool"):
+            return
+        try:
+            apps = await self.computer.tool("list_apps")
+            active = [a for a in apps.get("apps", [])
+                      if a.get("active") and a.get("running")]
+            if active:
+                self._frontmost = active[0].get("name")
+        except Exception:  # noqa: BLE001 - scoping is an optimization
+            pass
+
+    def _library(self, utterance: str = "") -> list[dict]:
+        """The matcher's view, capped near its trained library size. Selection
+        blends three signals so a 200-macro store still fits in a 25-slot
+        prompt: keyword overlap with the utterance (retrieval), frontmost-app
+        scope, and frecency. Colder misses fall to the LLM tier."""
+        ranked = self.store.templates()
+        by_id = {m.id: m for m in self.store.macros.values()}
+        front = (self._frontmost or "").lower()
+        words = {w for w in re.findall(r"[a-z0-9']+", utterance.lower())
+                 if len(w) > 2}
+
+        def overlap(t: dict) -> int:
+            hay: set[str] = set(re.findall(r"[a-z0-9']+", t["description"].lower()))
+            for ex in t.get("examples", []):
+                hay.update(re.findall(r"[a-z0-9']+", ex["utterance"].lower()))
+            return len(words & hay)
+
+        def key(item: tuple[int, dict]) -> tuple:
+            idx, t = item
+            app = (by_id[t["id"]].app or "") if t["id"] in by_id else ""
+            scoped = bool(app) and bool(front) and app.lower() == front
+            return (-overlap(t), 0 if scoped else (1 if not app else 2), idx)
+
+        ordered = [t for _, t in sorted(enumerate(ranked), key=key)]
+        return ordered[:25]
 
     def ready(self) -> dict:
         """Health check for integrators: is the instant tier usable?"""
@@ -121,10 +167,7 @@ class Session:
         none) so the caller can decide whether to fall back."""
         t0 = time.perf_counter()
         utterance = utterance.strip()
-        # top-N by frecency keeps the matcher prompt near its trained library
-        # size; colder macros fall to the LLM tier, which re-learns/warms them
-        templates = self.store.templates()[:25]
-        hit = self.tiny.match(utterance, templates) if utterance else None
+        hit = self.tiny.match(utterance, self._library(utterance)) if utterance else None
         match_ms = (time.perf_counter() - t0) * 1000
         if not hit:
             if self.llm and utterance:
@@ -139,6 +182,10 @@ class Session:
         executor = Executor(self.computer, Snapshot({}), allow_risky=self.allow_risky,
                             on_event=_replay_printer if self.verbose else None)
         result = await executor.replay(plan["actions"], plan.get("guard"))
+        import asyncio
+        refresh = asyncio.create_task(self._refresh_frontmost())
+        self._pending.add(refresh)
+        refresh.add_done_callback(self._pending.discard)
         if result.status in ("aborted", "guard_failed") and self.llm:
             # the replay hit reality and lost (unknown app name, UI drift) —
             # this is exactly what the LLM tier is for; its success re-learns
@@ -170,32 +217,40 @@ class Session:
                                  allow_risky=self.allow_risky,
                                  verbose=self.verbose, on_event=collect)
         status = results[-1].status if results else "aborted"
-        learned = None
-        if executed and status in ("done", "observe"):
-            if self.verbose:
-                print("  parameterizing into a template ...")
-            try:
-                macro_dict = await parameterize(utterance, debind(executed), self.llm)
-            except Exception:  # noqa: BLE001 - learning is best-effort
-                macro_dict = None
-            if macro_dict:
-                macro_dict.setdefault("guard", infer_guard(macro_dict["actions"]))
-                self.learn(Macro(**{k: macro_dict[k] for k in
-                                    ("id", "description", "slots", "examples",
-                                     "actions", "guard")}))
-                learned = macro_dict["id"]
-                if self.verbose:
-                    print(f"  learned template [{learned}] slots={macro_dict['slots']}")
-                    for op in macro_dict["actions"]:
-                        print(f"    {_op_line(op)}")
+        learning = bool(executed) and status in ("done", "observe")
+        if learning:
+            # learning happens OFF the hot path — the user's task is already
+            # done; parameterization is a second LLM call they shouldn't wait on
+            import asyncio
+            task = asyncio.create_task(self._learn_async(utterance, list(executed)))
+            self._pending.add(task)
+            task.add_done_callback(self._pending.discard)
         return {
             "tier": "fast",
             "status": status,
             "actions": len(executed),
-            "learned": learned,
+            "learning": learning,
             "match_ms": round(match_ms),
             "total_ms": round((time.perf_counter() - t0) * 1000),
         }
+
+    async def _learn_async(self, utterance: str, executed: list[dict]) -> None:
+        await self._refresh_frontmost()  # the run may have changed the app
+        try:
+            macro_dict = await parameterize(utterance, debind(executed), self.llm)
+        except Exception:  # noqa: BLE001 - learning is best-effort
+            return
+        if not macro_dict:
+            return
+        macro_dict.setdefault("guard", infer_guard(macro_dict["actions"]))
+        macro = Macro(**{k: macro_dict[k] for k in
+                         ("id", "description", "slots", "examples",
+                          "actions", "guard")})
+        macro.app = self._frontmost  # scope to the app the run landed in
+        self.learn(macro)
+        if self.verbose:
+            print(f"\n  ✓ learned [{macro.id}] slots={macro.slots} "
+                  f"(app: {macro.app or 'any'}) — say it again for instant")
 
     def learn(self, macro: Macro) -> None:
         """Add a macro (e.g. parameterized from a successful LLM-tier run via

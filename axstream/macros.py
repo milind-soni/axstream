@@ -33,6 +33,7 @@ class Macro:
     examples: list[dict]  # [{"utterance": str, "slots": {...}}]
     actions: list[dict]  # templated action ops; strings may contain {slot}
     guard: Optional[dict] = None  # an ax target that must resolve before replay
+    app: Optional[str] = None  # app scope (launch name); None = universal
     rank: float = 1.0
     last_used: int = 0
 

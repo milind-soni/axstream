@@ -1,0 +1,1262 @@
+[
+ {
+  "id": "mail_open",
+  "app": "Mail",
+  "description": "open the Mail app",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open mail",
+    "slots": {}
+   },
+   {
+    "utterance": "show my email",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   }
+  ]
+ },
+ {
+  "id": "mail_new_message",
+  "app": "Mail",
+  "description": "compose a new email",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "new email",
+    "slots": {}
+   },
+   {
+    "utterance": "compose a mail for me",
+    "slots": {}
+   },
+   {
+    "utterance": "start a new message",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_compose_to",
+  "app": "Mail",
+  "description": "start a new email addressed to someone",
+  "slots": [
+   "recipient"
+  ],
+  "examples": [
+   {
+    "utterance": "email to john",
+    "slots": {
+     "recipient": "john"
+    }
+   },
+   {
+    "utterance": "write an email to sarah",
+    "slots": {
+     "recipient": "sarah"
+    }
+   },
+   {
+    "utterance": "new mail to milind",
+    "slots": {
+     "recipient": "milind"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{recipient}"
+   }
+  ]
+ },
+ {
+  "id": "mail_send",
+  "app": "Mail",
+  "description": "send the email currently being composed",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "send it",
+    "slots": {}
+   },
+   {
+    "utterance": "send the email",
+    "slots": {}
+   },
+   {
+    "utterance": "send this message",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "d"
+    ],
+    "risk": "risky"
+   }
+  ]
+ },
+ {
+  "id": "mail_save_draft",
+  "app": "Mail",
+  "description": "save the current email as a draft",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "save this as a draft",
+    "slots": {}
+   },
+   {
+    "utterance": "save the draft",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "s"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_reply",
+  "app": "Mail",
+  "description": "reply to the selected email",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "reply to this email",
+    "slots": {}
+   },
+   {
+    "utterance": "reply",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "r"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_reply_all",
+  "app": "Mail",
+  "description": "reply to everyone on the selected email",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "reply all",
+    "slots": {}
+   },
+   {
+    "utterance": "reply to everyone",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "r"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_forward",
+  "app": "Mail",
+  "description": "forward the selected email",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "forward this email",
+    "slots": {}
+   },
+   {
+    "utterance": "forward this message",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "f"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_mark_read_unread",
+  "app": "Mail",
+  "description": "toggle read or unread on the selected email",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "mark this as unread",
+    "slots": {}
+   },
+   {
+    "utterance": "mark it read",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "u"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_mark_junk",
+  "app": "Mail",
+  "description": "mark the selected email as junk",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "mark this as junk",
+    "slots": {}
+   },
+   {
+    "utterance": "this is spam",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "j"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_flag",
+  "app": "Mail",
+  "description": "flag the selected email",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "flag this email",
+    "slots": {}
+   },
+   {
+    "utterance": "flag it",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "l"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_check_new",
+  "app": "Mail",
+  "description": "check for new mail",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "check for new mail",
+    "slots": {}
+   },
+   {
+    "utterance": "refresh my inbox",
+    "slots": {}
+   },
+   {
+    "utterance": "any new emails",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "mail_search",
+  "app": "Mail",
+  "description": "search the mailbox for something",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search my mail for invoices",
+    "slots": {
+     "query": "invoices"
+    }
+   },
+   {
+    "utterance": "find emails about flight booking",
+    "slots": {
+     "query": "flight booking"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Mail"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "option",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "notes_new_note",
+  "app": "Notes",
+  "description": "create a new note",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "new note",
+    "slots": {}
+   },
+   {
+    "utterance": "create a note",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "notes_new_note_with_text",
+  "app": "Notes",
+  "description": "create a new note containing dictated text",
+  "slots": [
+   "text"
+  ],
+  "examples": [
+   {
+    "utterance": "make a note that says call the plumber tomorrow",
+    "slots": {
+     "text": "call the plumber tomorrow"
+    }
+   },
+   {
+    "utterance": "note down buy milk and eggs",
+    "slots": {
+     "text": "buy milk and eggs"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{text}"
+   }
+  ]
+ },
+ {
+  "id": "notes_new_checklist",
+  "app": "Notes",
+  "description": "create a new note as a checklist with a first item",
+  "slots": [
+   "item"
+  ],
+  "examples": [
+   {
+    "utterance": "start a checklist with pack passport",
+    "slots": {
+     "item": "pack passport"
+    }
+   },
+   {
+    "utterance": "new checklist buy groceries",
+    "slots": {
+     "item": "buy groceries"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "l"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{item}"
+   }
+  ]
+ },
+ {
+  "id": "notes_search",
+  "app": "Notes",
+  "description": "search in notes",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search notes for groceries",
+    "slots": {
+     "query": "groceries"
+    }
+   },
+   {
+    "utterance": "find wifi password in my notes",
+    "slots": {
+     "query": "wifi password"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   }
+  ]
+ },
+ {
+  "id": "notes_checklist_toggle",
+  "app": "Notes",
+  "description": "turn the current line into a checklist item",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make this a checklist",
+    "slots": {}
+   },
+   {
+    "utterance": "turn this into a checklist item",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "l"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "notes_format_title",
+  "app": "Notes",
+  "description": "format the current line as a title",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make this a title",
+    "slots": {}
+   },
+   {
+    "utterance": "format as title",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "t"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "notes_format_heading",
+  "app": "Notes",
+  "description": "format the current line as a heading",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make this a heading",
+    "slots": {}
+   },
+   {
+    "utterance": "format as heading",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "h"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "notes_format_body",
+  "app": "Notes",
+  "description": "format the current line as body text",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make this body text",
+    "slots": {}
+   },
+   {
+    "utterance": "format as normal text",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "notes_bulleted_list",
+  "app": "Notes",
+  "description": "turn the current line into a bulleted list",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make this a bullet list",
+    "slots": {}
+   },
+   {
+    "utterance": "start bullet points",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "7"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "notes_numbered_list",
+  "app": "Notes",
+  "description": "turn the current line into a numbered list",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make this a numbered list",
+    "slots": {}
+   },
+   {
+    "utterance": "start a numbered list",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Notes"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "9"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_open",
+  "app": "Calendar",
+  "description": "open the Calendar app",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open my calendar",
+    "slots": {}
+   },
+   {
+    "utterance": "show the calendar",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   }
+  ]
+ },
+ {
+  "id": "calendar_new_event",
+  "app": "Calendar",
+  "description": "create a new event",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "new event",
+    "slots": {}
+   },
+   {
+    "utterance": "add an event to my calendar",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_quick_event",
+  "app": "Calendar",
+  "description": "create an event from a natural language phrase",
+  "slots": [
+   "text"
+  ],
+  "examples": [
+   {
+    "utterance": "add lunch with sam at noon tomorrow to my calendar",
+    "slots": {
+     "text": "lunch with sam at noon tomorrow"
+    }
+   },
+   {
+    "utterance": "schedule dentist friday at 3pm",
+    "slots": {
+     "text": "dentist friday at 3pm"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{text}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_today",
+  "app": "Calendar",
+  "description": "jump to today",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "go to today",
+    "slots": {}
+   },
+   {
+    "utterance": "show me today",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "t"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_day_view",
+  "app": "Calendar",
+  "description": "switch to day view",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "day view",
+    "slots": {}
+   },
+   {
+    "utterance": "show my day",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_week_view",
+  "app": "Calendar",
+  "description": "switch to week view",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "week view",
+    "slots": {}
+   },
+   {
+    "utterance": "show my week",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_month_view",
+  "app": "Calendar",
+  "description": "switch to month view",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "month view",
+    "slots": {}
+   },
+   {
+    "utterance": "show the whole month",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "3"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_year_view",
+  "app": "Calendar",
+  "description": "switch to year view",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "year view",
+    "slots": {}
+   },
+   {
+    "utterance": "show the whole year",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "4"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_next",
+  "app": "Calendar",
+  "description": "go to the next day week month or year depending on view",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "next week",
+    "slots": {}
+   },
+   {
+    "utterance": "go forward",
+    "slots": {}
+   },
+   {
+    "utterance": "show the next one",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "right"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_previous",
+  "app": "Calendar",
+  "description": "go to the previous day week month or year depending on view",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "previous week",
+    "slots": {}
+   },
+   {
+    "utterance": "go back",
+    "slots": {}
+   },
+   {
+    "utterance": "show the last one",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "left"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_go_to_date",
+  "app": "Calendar",
+  "description": "open the go to date dialog",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "go to a specific date",
+    "slots": {}
+   },
+   {
+    "utterance": "jump to a date",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "t"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "calendar_refresh",
+  "app": "Calendar",
+  "description": "refresh all calendars",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "refresh my calendar",
+    "slots": {}
+   },
+   {
+    "utterance": "sync calendars",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Calendar"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "r"
+    ]
+   }
+  ]
+ }
+]

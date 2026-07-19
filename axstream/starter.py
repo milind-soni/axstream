@@ -10,12 +10,12 @@ paste, undo...) act on the frontmost app.
 
 from .macros import Macro
 
-def _m(id, description, slots, examples, actions, risk=None):  # noqa: A002
+def _m(id, description, slots, examples, actions, risk=None, app=None):  # noqa: A002
     if risk:
         actions = [{**a, "risk": risk} if a.get("do") != "wait" else a
                    for a in actions]
     return Macro(id=id, description=description, slots=slots,
-                 examples=examples, actions=actions)
+                 examples=examples, actions=actions, app=app)
 
 
 STARTER = [
@@ -95,25 +95,25 @@ STARTER = [
         {"op": "act", "do": "key", "keys": ["cmd", "t"]},
         {"op": "act", "do": "wait", "ms": 300},
         {"op": "act", "do": "type", "text": "{url}"},
-        {"op": "act", "do": "key", "keys": ["enter"]}]),
+        {"op": "act", "do": "key", "keys": ["enter"]}], app="Safari"),
     _m("firefox_open_url", "open a website in firefox", ["url"],
        [{"utterance": "open wikipedia.org in firefox", "slots": {"url": "wikipedia.org"}}],
        [{"op": "act", "do": "open", "target": "Firefox"},
         {"op": "act", "do": "key", "keys": ["cmd", "t"]},
         {"op": "act", "do": "wait", "ms": 300},
         {"op": "act", "do": "type", "text": "{url}"},
-        {"op": "act", "do": "key", "keys": ["enter"]}]),
+        {"op": "act", "do": "key", "keys": ["enter"]}], app="Firefox"),
     _m("safari_search", "search the web in safari", ["query"],
        [{"utterance": "search for weather in tokyo", "slots": {"query": "weather in tokyo"}}],
        [{"op": "act", "do": "open", "target": "Safari"},
         {"op": "act", "do": "key", "keys": ["cmd", "t"]},
         {"op": "act", "do": "wait", "ms": 300},
         {"op": "act", "do": "type", "text": "{query}"},
-        {"op": "act", "do": "key", "keys": ["enter"]}]),
+        {"op": "act", "do": "key", "keys": ["enter"]}], app="Safari"),
     _m("safari_new_tab", "open a new tab in safari", [],
        [{"utterance": "new tab in safari", "slots": {}}],
        [{"op": "act", "do": "open", "target": "Safari"},
-        {"op": "act", "do": "key", "keys": ["cmd", "t"]}]),
+        {"op": "act", "do": "key", "keys": ["cmd", "t"]}], app="Safari"),
     _m("reopen_closed_tab", "reopen the last closed tab", [],
        [{"utterance": "bring back that tab", "slots": {}}],
        [{"op": "act", "do": "key", "keys": ["cmd", "shift", "t"]}]),
@@ -125,7 +125,7 @@ STARTER = [
        [{"op": "act", "do": "open", "target": "TextEdit"},
         {"op": "act", "do": "key", "keys": ["cmd", "n"]},
         {"op": "act", "do": "wait", "ms": 500},
-        {"op": "act", "do": "type", "text": "{text}"}]),
+        {"op": "act", "do": "type", "text": "{text}"}], app="TextEdit"),
 
     # -- risky, gated --------------------------------------------------------
     _m("quit_current_app", "quit the current application", [],

@@ -1,0 +1,1273 @@
+[
+ {
+  "id": "messages_open",
+  "app": "Messages",
+  "description": "open the messages app",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open messages",
+    "slots": {}
+   },
+   {
+    "utterance": "show me my messages",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   }
+  ]
+ },
+ {
+  "id": "messages_new_message",
+  "app": "Messages",
+  "description": "start a new message to a contact without sending anything",
+  "slots": [
+   "contact"
+  ],
+  "examples": [
+   {
+    "utterance": "new message to mom",
+    "slots": {
+     "contact": "mom"
+    }
+   },
+   {
+    "utterance": "start a message to john",
+    "slots": {
+     "contact": "john"
+    }
+   },
+   {
+    "utterance": "compose a message to sarah",
+    "slots": {
+     "contact": "sarah"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{contact}"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 600
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "messages_send_message",
+  "app": "Messages",
+  "description": "send a text message to a contact",
+  "slots": [
+   "contact",
+   "message"
+  ],
+  "examples": [
+   {
+    "utterance": "text mom saying i am on my way",
+    "slots": {
+     "contact": "mom",
+     "message": "i am on my way"
+    }
+   },
+   {
+    "utterance": "send a message to sarah that says running late",
+    "slots": {
+     "contact": "sarah",
+     "message": "running late"
+    }
+   },
+   {
+    "utterance": "message john hello there",
+    "slots": {
+     "contact": "john",
+     "message": "hello there"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{contact}"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 600
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{message}"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ],
+    "risk": "risky"
+   }
+  ]
+ },
+ {
+  "id": "messages_search",
+  "app": "Messages",
+  "description": "search conversations in messages",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search messages for dinner plans",
+    "slots": {
+     "query": "dinner plans"
+    }
+   },
+   {
+    "utterance": "find flight details in messages",
+    "slots": {
+     "query": "flight details"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   }
+  ]
+ },
+ {
+  "id": "messages_emoji_picker",
+  "app": "Messages",
+  "description": "open the emoji picker in messages",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open the emoji picker in messages",
+    "slots": {}
+   },
+   {
+    "utterance": "show emojis in messages",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "cmd",
+     "space"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "messages_close_window",
+  "app": "Messages",
+  "description": "close the front messages window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "close the messages window",
+    "slots": {}
+   },
+   {
+    "utterance": "close this message window",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "w"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "messages_minimize",
+  "app": "Messages",
+  "description": "minimize the messages window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "minimize messages",
+    "slots": {}
+   },
+   {
+    "utterance": "put messages in the dock",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "m"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "messages_hide",
+  "app": "Messages",
+  "description": "hide the messages app",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "hide messages",
+    "slots": {}
+   },
+   {
+    "utterance": "get messages off my screen",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "h"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "messages_quit",
+  "app": "Messages",
+  "description": "quit the messages app",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "quit messages",
+    "slots": {}
+   },
+   {
+    "utterance": "close messages completely",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Messages"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "q"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_play_pause",
+  "app": "Music",
+  "description": "play or pause music",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "pause the music",
+    "slots": {}
+   },
+   {
+    "utterance": "play music",
+    "slots": {}
+   },
+   {
+    "utterance": "resume the song",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "space"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_next_track",
+  "app": "Music",
+  "description": "skip to the next song",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "next song",
+    "slots": {}
+   },
+   {
+    "utterance": "skip this track",
+    "slots": {}
+   },
+   {
+    "utterance": "play the next one",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "right"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_previous_track",
+  "app": "Music",
+  "description": "go back to the previous song",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "previous song",
+    "slots": {}
+   },
+   {
+    "utterance": "go back a track",
+    "slots": {}
+   },
+   {
+    "utterance": "play the last song again",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "left"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_volume_up",
+  "app": "Music",
+  "description": "turn the music volume up",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "turn up the music",
+    "slots": {}
+   },
+   {
+    "utterance": "make the music louder",
+    "slots": {}
+   },
+   {
+    "utterance": "music volume up",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "up"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "up"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_volume_down",
+  "app": "Music",
+  "description": "turn the music volume down",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "turn down the music",
+    "slots": {}
+   },
+   {
+    "utterance": "make the music quieter",
+    "slots": {}
+   },
+   {
+    "utterance": "music volume down",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "down"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "down"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_search",
+  "app": "Music",
+  "description": "search for a song artist or album in music",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search for bohemian rhapsody in music",
+    "slots": {
+     "query": "bohemian rhapsody"
+    }
+   },
+   {
+    "utterance": "find taylor swift in my music",
+    "slots": {
+     "query": "taylor swift"
+    }
+   },
+   {
+    "utterance": "look up daft punk in music",
+    "slots": {
+     "query": "daft punk"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_show_current_song",
+  "app": "Music",
+  "description": "jump to the currently playing song in the library",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show me what song is playing",
+    "slots": {}
+   },
+   {
+    "utterance": "go to the current song in music",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "l"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_minimize",
+  "app": "Music",
+  "description": "minimize the music window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "minimize music",
+    "slots": {}
+   },
+   {
+    "utterance": "put music in the dock",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "m"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_hide",
+  "app": "Music",
+  "description": "hide the music app while it keeps playing",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "hide the music app",
+    "slots": {}
+   },
+   {
+    "utterance": "get music off my screen",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "h"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "music_quit",
+  "app": "Music",
+  "description": "quit the music app and stop playback",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "quit music",
+    "slots": {}
+   },
+   {
+    "utterance": "close the music app completely",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Music"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "q"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "settings_open",
+  "app": "System Settings",
+  "description": "open system settings",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open system settings",
+    "slots": {}
+   },
+   {
+    "utterance": "open my mac settings",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "System Settings"
+   }
+  ]
+ },
+ {
+  "id": "settings_open_pane",
+  "app": "System Settings",
+  "description": "open a specific pane in system settings by name",
+  "slots": [
+   "pane"
+  ],
+  "examples": [
+   {
+    "utterance": "open the keyboard settings",
+    "slots": {
+     "pane": "keyboard"
+    }
+   },
+   {
+    "utterance": "go to trackpad settings",
+    "slots": {
+     "pane": "trackpad"
+    }
+   },
+   {
+    "utterance": "open battery in system settings",
+    "slots": {
+     "pane": "battery"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "System Settings"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{pane}"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "down"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "settings_search",
+  "app": "System Settings",
+  "description": "search system settings and show matching results",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search settings for screen saver",
+    "slots": {
+     "query": "screen saver"
+    }
+   },
+   {
+    "utterance": "find night shift in settings",
+    "slots": {
+     "query": "night shift"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "System Settings"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   }
+  ]
+ },
+ {
+  "id": "settings_displays",
+  "app": "System Settings",
+  "description": "open the displays settings pane",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open display settings",
+    "slots": {}
+   },
+   {
+    "utterance": "go to my screen settings",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "System Settings"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "displays"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "down"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "settings_bluetooth",
+  "app": "System Settings",
+  "description": "open the bluetooth settings pane",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open bluetooth settings",
+    "slots": {}
+   },
+   {
+    "utterance": "show me bluetooth in settings",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "System Settings"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "bluetooth"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "down"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "settings_sound",
+  "app": "System Settings",
+  "description": "open the sound settings pane",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open sound settings",
+    "slots": {}
+   },
+   {
+    "utterance": "go to audio settings",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "System Settings"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "sound"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "down"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "settings_hide",
+  "app": "System Settings",
+  "description": "hide the system settings window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "hide system settings",
+    "slots": {}
+   },
+   {
+    "utterance": "get settings off my screen",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "System Settings"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "h"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "settings_quit",
+  "app": "System Settings",
+  "description": "quit system settings",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "quit system settings",
+    "slots": {}
+   },
+   {
+    "utterance": "close settings",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "System Settings"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "q"
+    ]
+   }
+  ]
+ }
+]

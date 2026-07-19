@@ -1,0 +1,2140 @@
+[
+ {
+  "id": "chrome_open_url",
+  "app": "Google Chrome",
+  "description": "open a website in chrome",
+  "slots": [
+   "url"
+  ],
+  "examples": [
+   {
+    "utterance": "open wikipedia.org in chrome",
+    "slots": {
+     "url": "wikipedia.org"
+    }
+   },
+   {
+    "utterance": "go to github.com in chrome",
+    "slots": {
+     "url": "github.com"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "t"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{url}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_search_web",
+  "app": "Google Chrome",
+  "description": "search the web in chrome",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search chrome for best mechanical keyboards",
+    "slots": {
+     "query": "best mechanical keyboards"
+    }
+   },
+   {
+    "utterance": "google weather in singapore",
+    "slots": {
+     "query": "weather in singapore"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "l"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_new_tab",
+  "app": "Google Chrome",
+  "description": "open a new tab in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "new tab in chrome",
+    "slots": {}
+   },
+   {
+    "utterance": "open a new chrome tab",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "t"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_close_tab",
+  "app": "Google Chrome",
+  "description": "close the current chrome tab",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "close this tab",
+    "slots": {}
+   },
+   {
+    "utterance": "close the current chrome tab",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "w"
+    ],
+    "risk": "risky"
+   }
+  ]
+ },
+ {
+  "id": "chrome_reopen_closed_tab",
+  "app": "Google Chrome",
+  "description": "reopen the last closed tab in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "reopen the tab i just closed",
+    "slots": {}
+   },
+   {
+    "utterance": "bring back my last closed tab in chrome",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "t"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_incognito_window",
+  "app": "Google Chrome",
+  "description": "open a new incognito window in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open incognito",
+    "slots": {}
+   },
+   {
+    "utterance": "new private window in chrome",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_new_window",
+  "app": "Google Chrome",
+  "description": "open a new chrome window",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open a new chrome window",
+    "slots": {}
+   },
+   {
+    "utterance": "new window in chrome",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_next_tab",
+  "app": "Google Chrome",
+  "description": "switch to the next tab in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "next tab",
+    "slots": {}
+   },
+   {
+    "utterance": "switch to the next chrome tab",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "tab"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_previous_tab",
+  "app": "Google Chrome",
+  "description": "switch to the previous tab in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "previous tab",
+    "slots": {}
+   },
+   {
+    "utterance": "go back one tab in chrome",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "shift",
+     "tab"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_reload_page",
+  "app": "Google Chrome",
+  "description": "reload the current page in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "reload the page",
+    "slots": {}
+   },
+   {
+    "utterance": "refresh chrome",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "r"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_find_in_page",
+  "app": "Google Chrome",
+  "description": "find text on the current page in chrome",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "find pricing on this page",
+    "slots": {
+     "query": "pricing"
+    }
+   },
+   {
+    "utterance": "search this page for installation",
+    "slots": {
+     "query": "installation"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_bookmark_page",
+  "app": "Google Chrome",
+  "description": "bookmark the current page in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "bookmark this page",
+    "slots": {}
+   },
+   {
+    "utterance": "save this page to bookmarks",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_open_downloads",
+  "app": "Google Chrome",
+  "description": "open the downloads page in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show my chrome downloads",
+    "slots": {}
+   },
+   {
+    "utterance": "open downloads in chrome",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "j"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_open_history",
+  "app": "Google Chrome",
+  "description": "open browsing history in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show my chrome history",
+    "slots": {}
+   },
+   {
+    "utterance": "open browsing history",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "y"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "chrome_open_devtools",
+  "app": "Google Chrome",
+  "description": "open developer tools in chrome",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open dev tools",
+    "slots": {}
+   },
+   {
+    "utterance": "show developer tools in chrome",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Google Chrome"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "option",
+     "i"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_open_file",
+  "app": "Visual Studio Code",
+  "description": "open a file by name in vs code",
+  "slots": [
+   "file"
+  ],
+  "examples": [
+   {
+    "utterance": "open server.mjs in vs code",
+    "slots": {
+     "file": "server.mjs"
+    }
+   },
+   {
+    "utterance": "open the file package.json",
+    "slots": {
+     "file": "package.json"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "p"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{file}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_command_palette",
+  "app": "Visual Studio Code",
+  "description": "open the command palette in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open the command palette",
+    "slots": {}
+   },
+   {
+    "utterance": "show command palette in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "p"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_run_command",
+  "app": "Visual Studio Code",
+  "description": "run a named command from the vs code command palette",
+  "slots": [
+   "command"
+  ],
+  "examples": [
+   {
+    "utterance": "run reload window in vs code",
+    "slots": {
+     "command": "reload window"
+    }
+   },
+   {
+    "utterance": "run the command toggle word wrap",
+    "slots": {
+     "command": "toggle word wrap"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "p"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{command}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_search_in_project",
+  "app": "Visual Studio Code",
+  "description": "search across the whole project in vs code",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search the project for handleSubmit",
+    "slots": {
+     "query": "handleSubmit"
+    }
+   },
+   {
+    "utterance": "find todo across the codebase",
+    "slots": {
+     "query": "todo"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_find_in_file",
+  "app": "Visual Studio Code",
+  "description": "find text in the current file in vs code",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "find useState in this file",
+    "slots": {
+     "query": "useState"
+    }
+   },
+   {
+    "utterance": "search this file for import",
+    "slots": {
+     "query": "import"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "f"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_go_to_line",
+  "app": "Visual Studio Code",
+  "description": "jump to a line number in vs code",
+  "slots": [
+   "line"
+  ],
+  "examples": [
+   {
+    "utterance": "go to line 42",
+    "slots": {
+     "line": "42"
+    }
+   },
+   {
+    "utterance": "jump to line 120 in vs code",
+    "slots": {
+     "line": "120"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 400
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "g"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{line}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_toggle_sidebar",
+  "app": "Visual Studio Code",
+  "description": "toggle the sidebar in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "toggle the sidebar",
+    "slots": {}
+   },
+   {
+    "utterance": "hide the vs code sidebar",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_toggle_panel",
+  "app": "Visual Studio Code",
+  "description": "toggle the bottom panel in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "toggle the bottom panel",
+    "slots": {}
+   },
+   {
+    "utterance": "hide the panel in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "j"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_save_file",
+  "app": "Visual Studio Code",
+  "description": "save the current file in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "save the file",
+    "slots": {}
+   },
+   {
+    "utterance": "save this in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "s"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_save_all",
+  "app": "Visual Studio Code",
+  "description": "save all open files in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "save all files",
+    "slots": {}
+   },
+   {
+    "utterance": "save everything in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "option",
+     "s"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_close_editor",
+  "app": "Visual Studio Code",
+  "description": "close the current editor tab in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "close this file",
+    "slots": {}
+   },
+   {
+    "utterance": "close the current editor in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "w"
+    ],
+    "risk": "risky"
+   }
+  ]
+ },
+ {
+  "id": "vscode_show_explorer",
+  "app": "Visual Studio Code",
+  "description": "show the file explorer in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show the file explorer",
+    "slots": {}
+   },
+   {
+    "utterance": "open the explorer in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "e"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_show_source_control",
+  "app": "Visual Studio Code",
+  "description": "show the source control view in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show source control",
+    "slots": {}
+   },
+   {
+    "utterance": "open the git panel in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "ctrl",
+     "shift",
+     "g"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_show_extensions",
+  "app": "Visual Studio Code",
+  "description": "show the extensions view in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show extensions",
+    "slots": {}
+   },
+   {
+    "utterance": "open the extensions panel in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "x"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "vscode_format_document",
+  "app": "Visual Studio Code",
+  "description": "format the current document in vs code",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "format this file",
+    "slots": {}
+   },
+   {
+    "utterance": "format the document in vs code",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Visual Studio Code"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "shift",
+     "option",
+     "f"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_jump_to",
+  "app": "Slack",
+  "description": "jump to a channel or person in slack",
+  "slots": [
+   "target"
+  ],
+  "examples": [
+   {
+    "utterance": "go to the engineering channel in slack",
+    "slots": {
+     "target": "engineering"
+    }
+   },
+   {
+    "utterance": "open my slack conversation with sarah",
+    "slots": {
+     "target": "sarah"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "k"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{target}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_send_message",
+  "app": "Slack",
+  "description": "send a message to a channel or person in slack",
+  "slots": [
+   "target",
+   "message"
+  ],
+  "examples": [
+   {
+    "utterance": "message the standup channel on my way",
+    "slots": {
+     "target": "standup",
+     "message": "on my way"
+    }
+   },
+   {
+    "utterance": "tell alex in slack lunch at noon",
+    "slots": {
+     "target": "alex",
+     "message": "lunch at noon"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "k"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{target}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{message}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_search",
+  "app": "Slack",
+  "description": "search slack messages and files",
+  "slots": [
+   "query"
+  ],
+  "examples": [
+   {
+    "utterance": "search slack for quarterly report",
+    "slots": {
+     "query": "quarterly report"
+    }
+   },
+   {
+    "utterance": "find deploy checklist in slack",
+    "slots": {
+     "query": "deploy checklist"
+    }
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 500
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "g"
+    ]
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "type",
+    "text": "{query}"
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "return"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_unreads",
+  "app": "Slack",
+  "description": "open all unread messages in slack",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show my slack unreads",
+    "slots": {}
+   },
+   {
+    "utterance": "open unread messages in slack",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_threads",
+  "app": "Slack",
+  "description": "open the threads view in slack",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open my slack threads",
+    "slots": {}
+   },
+   {
+    "utterance": "show threads in slack",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "t"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_all_dms",
+  "app": "Slack",
+  "description": "open the direct messages view in slack",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show my direct messages in slack",
+    "slots": {}
+   },
+   {
+    "utterance": "open slack dms",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "k"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_activity",
+  "app": "Slack",
+  "description": "open mentions and reactions in slack",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show my slack mentions",
+    "slots": {}
+   },
+   {
+    "utterance": "open activity in slack",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "m"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_new_message",
+  "app": "Slack",
+  "description": "start composing a new message in slack",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "compose a new slack message",
+    "slots": {}
+   },
+   {
+    "utterance": "start a new message in slack",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_saved_items",
+  "app": "Slack",
+  "description": "open saved items in slack",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show my saved items in slack",
+    "slots": {}
+   },
+   {
+    "utterance": "open slack saved messages",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "s"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "slack_toggle_sidebar",
+  "app": "Slack",
+  "description": "show or hide the sidebar in slack",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "toggle the slack sidebar",
+    "slots": {}
+   },
+   {
+    "utterance": "hide the sidebar in slack",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "Slack"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "d"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_toggle_mute",
+  "app": "zoom.us",
+  "description": "mute or unmute the microphone in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "mute me on zoom",
+    "slots": {}
+   },
+   {
+    "utterance": "unmute my zoom mic",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "a"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_toggle_video",
+  "app": "zoom.us",
+  "description": "start or stop the camera in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "turn off my zoom camera",
+    "slots": {}
+   },
+   {
+    "utterance": "toggle video on zoom",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "v"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_share_screen",
+  "app": "zoom.us",
+  "description": "start or stop screen sharing in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "share my screen on zoom",
+    "slots": {}
+   },
+   {
+    "utterance": "stop sharing my screen",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "s"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_raise_hand",
+  "app": "zoom.us",
+  "description": "raise or lower your hand in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "raise my hand on zoom",
+    "slots": {}
+   },
+   {
+    "utterance": "lower my hand in the meeting",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "option",
+     "y"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_toggle_chat",
+  "app": "zoom.us",
+  "description": "show or hide the in-meeting chat in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "open the zoom chat",
+    "slots": {}
+   },
+   {
+    "utterance": "hide chat in zoom",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "h"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_toggle_participants",
+  "app": "zoom.us",
+  "description": "show or hide the participants panel in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "show zoom participants",
+    "slots": {}
+   },
+   {
+    "utterance": "open the participants panel",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "u"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_invite",
+  "app": "zoom.us",
+  "description": "open the invite dialog in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "invite someone to this zoom",
+    "slots": {}
+   },
+   {
+    "utterance": "open zoom invite",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "i"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_toggle_record",
+  "app": "zoom.us",
+  "description": "start or stop local recording in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "start recording the zoom meeting",
+    "slots": {}
+   },
+   {
+    "utterance": "stop the zoom recording",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "r"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_switch_camera",
+  "app": "zoom.us",
+  "description": "switch to the next camera in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "switch my zoom camera",
+    "slots": {}
+   },
+   {
+    "utterance": "use the other camera in zoom",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "n"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_fullscreen",
+  "app": "zoom.us",
+  "description": "enter or exit full screen in zoom",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "make zoom full screen",
+    "slots": {}
+   },
+   {
+    "utterance": "exit full screen in zoom",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "shift",
+     "f"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "zoom_leave_meeting",
+  "app": "zoom.us",
+  "description": "leave the current zoom meeting",
+  "slots": [],
+  "examples": [
+   {
+    "utterance": "leave the zoom meeting",
+    "slots": {}
+   },
+   {
+    "utterance": "exit this zoom call",
+    "slots": {}
+   }
+  ],
+  "actions": [
+   {
+    "op": "act",
+    "do": "open",
+    "target": "zoom.us"
+   },
+   {
+    "op": "act",
+    "do": "wait",
+    "ms": 300
+   },
+   {
+    "op": "act",
+    "do": "key",
+    "keys": [
+     "cmd",
+     "w"
+    ],
+    "risk": "risky"
+   }
+  ]
+ }
+]
