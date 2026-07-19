@@ -136,6 +136,13 @@ class Session:
         executor = Executor(self.computer, Snapshot({}), allow_risky=self.allow_risky,
                             on_event=_replay_printer if self.verbose else None)
         result = await executor.replay(plan["actions"], plan.get("guard"))
+        if result.status in ("aborted", "guard_failed") and self.llm:
+            # the replay hit reality and lost (unknown app name, UI drift) —
+            # this is exactly what the LLM tier is for; its success re-learns
+            if self.verbose:
+                print(f"  replay {result.status} ({result.reason}) — "
+                      "falling back to the LLM tier")
+            return await self._fast_tier(utterance, t0, match_ms)
         return {
             "tier": "instant",
             "template": hit["template"],
