@@ -46,9 +46,9 @@ uv run python demo_dry.py
 
 # set up the local pieces once (full walkthrough: axstream.dev/docs/quickstart)
 brew install llama.cpp
-curl -L -o ~/models/LFM2.5-350M-Q4_K_M.gguf \
-  "https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF/resolve/main/LFM2.5-350M-Q4_K_M.gguf"
-llama-server -m ~/models/LFM2.5-350M-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
+curl -L -o ~/models/lfm25-350m-axstream-Q4_K_M.gguf \
+  "https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher/resolve/main/lfm25-350m-axstream-Q4_K_M.gguf"
+llama-server -m ~/models/lfm25-350m-axstream-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
 /bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"   # executor (grant Accessibility)
 
 # start everything with defaults and listen (auto-starts the matcher if down)
@@ -63,9 +63,10 @@ uv run axstream "launch safari"
 uv run pytest tests
 ```
 
-Use a **fine-tuned** matcher for the instant tier (base LFM2.5-350M ≈47% e2e
-vs ≈93% tuned; misses fall back to the LLM tier). `AXSTREAM_TINY_URL`
-overrides the matcher endpoint.
+The command above downloads the open
+[axstream-matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
+(94% e2e vs the base model's 47%; misses fall back to the LLM tier).
+`AXSTREAM_TINY_URL` overrides the matcher endpoint.
 
 ## Integrate your STT
 

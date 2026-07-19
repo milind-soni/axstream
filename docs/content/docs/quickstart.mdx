@@ -38,16 +38,16 @@ tells you at any point what's missing.
 
 ```sh
 brew install llama.cpp
-mkdir -p ~/models && curl -L -o ~/models/LFM2.5-350M-Q4_K_M.gguf \
-  "https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF/resolve/main/LFM2.5-350M-Q4_K_M.gguf"
-llama-server -m ~/models/LFM2.5-350M-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
+mkdir -p ~/models && curl -L -o ~/models/lfm25-350m-axstream-Q4_K_M.gguf \
+  "https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher/resolve/main/lfm25-350m-axstream-Q4_K_M.gguf"
+llama-server -m ~/models/lfm25-350m-axstream-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
 ```
 
-<Callout title="Base model = demo grade">
-The stock LFM2.5-350M scores ~47% end-to-end on match + slot extraction; a
-small LoRA fine-tune reaches ~93% at the same ~100ms. Misses are safe (they
-fall through to the LLM tier), but fine-tune before judging the instant tier.
-Any OpenAI-compatible server works — point `AXSTREAM_TINY_URL` at it.
+<Callout title="This is the fine-tuned matcher">
+[`axstream-matcher`](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
+scores 94% end-to-end on match + slot extraction (the stock base model scores
+~47%). Misses are safe — they fall through to the LLM tier. Any
+OpenAI-compatible server works; point `AXSTREAM_TINY_URL` at it.
 </Callout>
 
 </Step>
