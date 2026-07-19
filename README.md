@@ -25,8 +25,8 @@ of N × (decode + observe).
 
 Measured on the reference implementation: streaming execution saves **37%
 wall-clock** vs wait-then-act; a full plan from a fast LLM lands in **~0.4s**;
-a learned command replays in **~100ms with no LLM** at **93% end-to-end
-accuracy** (fine-tuned 350M matcher, held-out eval).
+a learned command replays in **~100ms with no LLM** at **94% end-to-end
+accuracy** ([open fine-tuned 350M matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher), held-out eval).
 
 ## Three speeds, one language
 

@@ -9,23 +9,27 @@ description: What's shipped, what's next.
   executor, accessibility-tree observation (~150ms scoped). Streaming execution
   saves ~37% wall-clock vs wait-then-act.
 - **The instant tier** — learned commands replay with no LLM: a local 350M
-  matcher resolves utterance → macro + slots in ~100ms at 93% end-to-end
-  accuracy (fine-tuned), guarded against the live screen, with frecency
-  ranking. A failed match falls back to the LLM tier.
+  matcher resolves utterance → macro + slots in ~100ms at 94% end-to-end
+  accuracy, guarded against the live screen, with frecency ranking. A failed
+  match falls back to the LLM tier. The matcher is
+  [published on Hugging Face](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
+  (LoRA adapter included).
+- **A starter library** — ~180 keyboard-first macros across Finder, Safari,
+  Chrome, Firefox, Mail, Notes, Calendar, Messages, Music, Terminal, VS Code,
+  Slack, Zoom and system-wide commands, seeded on first run.
 - **Two execution backends** — cua's `computer-server` (WebSocket), and
   `cua-driver` (MCP) for background, pid-addressed delivery with no focus
   stealing.
 
 ## Next
 
-- **Driver-native observation** — map the driver's window state into the
-  observer so both tiers run over the background-delivery backend.
 - **Guard coverage** — replay safety against UI drift: prefer late-bound
   role/title targets over coordinates, `assert` before anything
   `risk:risky`.
-- **Voice front-end** — streaming STT feeding tasks in, with eager execution
-  on stable partials: scaffolding runs while you're still speaking; anything
-  irreversible waits for the end of the utterance.
+- **Streaming voice** — hands-free local STT ships today (`axstream up
+  --voice`); next is eager execution on stable partials: scaffolding runs
+  while you're still speaking, anything irreversible waits for the end of the
+  utterance.
 - **A trained action model** — a small model fine-tuned to drive macOS from
   accessibility-tree text, replacing the hosted LLM in the fast tier. The
   spec + runtime stay open (MIT / CC BY 4.0); trained models and datasets are

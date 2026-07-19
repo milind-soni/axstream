@@ -1,10 +1,11 @@
 ---
 title: Quickstart
-description: From zero to actions-by-text on a fresh Mac.
+description: From zero to speaking commands at your Mac.
 ---
 
-Everything below starts from nothing. You need
-[uv](https://docs.astral.sh/uv/) and [Homebrew](https://brew.sh).
+Everything below starts from nothing on a Mac. You need
+[uv](https://docs.astral.sh/uv/) and [Homebrew](https://brew.sh). Total setup:
+about ten minutes, most of it downloads.
 
 ## 1. Get axstream
 
@@ -14,41 +15,37 @@ cd axstream
 uv sync
 ```
 
-## 2. Dry demo — no keys, no server, 10 seconds
+## 2. See the core trick — 10 seconds, no keys, no setup
 
 ```sh
 uv run python demo_dry.py
 ```
 
-Replays a canned LLM response at realistic decode speed into the real compiler
-and executor against a mock computer, and prints the streamed-vs-buffered
-timeline — typically ~37% wall-clock saved. This is the core thesis with zero
-setup.
+This replays a canned LLM response at realistic decode speed into the real
+compiler and executor against a mock computer. Watch the timeline: actions
+execute *while the model is still generating*, and the summary shows ~37%
+wall-clock saved vs waiting for the full response. That's the streaming thesis
+in one command.
 
-## 3. Set up the local pieces (once)
-
-Three local processes power the real thing. `python -m axstream --doctor`
-tells you at any point what's missing.
+## 3. Install the two local pieces
 
 <Steps>
 
 <Step>
 
-### The tiny matcher (instant tier)
+### The matcher — download the fine-tuned model
 
 ```sh
 brew install llama.cpp
 mkdir -p ~/models && curl -L -o ~/models/lfm25-350m-axstream-Q4_K_M.gguf \
   "https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher/resolve/main/lfm25-350m-axstream-Q4_K_M.gguf"
-llama-server -m ~/models/lfm25-350m-axstream-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
 ```
 
-<Callout title="This is the fine-tuned matcher">
-[`axstream-matcher`](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
-scores 94% end-to-end on match + slot extraction (the stock base model scores
-~47%). Misses are safe — they fall through to the LLM tier. Any
-OpenAI-compatible server works; point `AXSTREAM_TINY_URL` at it.
-</Callout>
+That's [`axstream-matcher`](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
+(219MB) — a 350M model fine-tuned for exactly one job: *which known command is
+this, and what are the variable words*, in ~100ms on Apple Silicon. It scores
+**94% end-to-end** where the stock base model scores 47%. You don't need to
+start it manually — `axstream up` does that for you.
 
 </Step>
 
@@ -56,67 +53,85 @@ OpenAI-compatible server works; point `AXSTREAM_TINY_URL` at it.
 
 ### The executor: cua-driver
 
-Background, pid-addressed keyboard/mouse delivery — no focus stealing.
+Delivers keys and clicks to apps **in the background** — no focus stealing,
+your mouse stays yours.
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"
 ```
 
-Grant **Accessibility** permission when prompted.
-
-</Step>
-
-<Step>
-
-### (Optional) computer-server — for the streaming LLM demo
-
-The streaming demo (`demo_live.py`) observes the accessibility tree through
-cua's computer-server:
-
-```sh
-git clone https://github.com/trycua/cua
-cd cua/libs/python/computer-server
-uv run python -m computer_server --port 8765
-```
-
-Grant your terminal **Accessibility** permission.
+Grant **Accessibility** permission when it asks — that's what lets it press
+keys on your behalf.
 
 </Step>
 
 </Steps>
 
-## 4. Run things
+## 4. Start it and try things
 
 ```sh
-# the one-liner: checks the setup, auto-starts the matcher if down, listens
-uv run axstream up            # type commands ('quit' to stop)
-uv run axstream up --voice    # speak them (needs: uv sync --extra voice)
-
-# check the setup
-uv run axstream --doctor
-
-# one utterance -> one action (instant tier; JSON result on stdout)
-uv run axstream "launch safari"
-
-# instant-tier demo with seeded macros — slot variations, timings
-uv run python demo_replay.py
-
-# speak instead of type (local STT; needs: uv sync --extra voice)
-uv run python demo_voice.py --hands-free
-
-# stream a novel task through an LLM (needs computer-server + a key)
-export GROQ_API_KEY=...
-uv run python demo_live.py --task "open TextEdit and type hello world" \
-  --uri ws://localhost:8765/ws
+uv run axstream up
 ```
 
-## 5. Tests
+`up` checks everything (starts the matcher if it's down, wakes the driver),
+seeds a starter library of ~180 macOS commands on first run (`axstream seed`),
+and listens. Try typing:
+
+```
+» open my downloads folder
+  ⚡ instant [finder_go_downloads] done · match 75ms · no LLM
+
+» take a screenshot
+  ⚡ instant [screenshot_full] done · match 68ms · no LLM
+
+» quit this app
+  (refused — risky commands are gated until you allow them)
+```
+
+⚡ **instant** means a known command replayed with no LLM anywhere — that's
+the tier that makes axstream feel different.
+
+## 5. Teach it something new
+
+Add a fast-LLM key (either provider) to `.env` in the repo root:
 
 ```sh
-uv run pytest tests
+echo 'OPENROUTER_API_KEY=sk-or-...' >> .env    # or GROQ_API_KEY=gsk_...
+```
+
+Restart `axstream up`, then say something it doesn't know:
+
+```
+» create a new tab in firefox
+  🐢 fast — the LLM watches the screen, does it, and learns it
+» create a new tab in firefox
+  ⚡ instant [new_firefox_tab] done · match 101ms · no LLM
+```
+
+That's the flywheel: **every command is slow at most once.** Learned macros
+live in `~/.axstream/macros.json` — plain JSON, yours to inspect or edit.
+
+## 6. Speak instead of type
+
+```sh
+uv sync --extra voice
+uv run axstream up --voice
+```
+
+First run downloads a local speech model (~600MB) and asks for microphone
+permission. Then just talk — pause about a second to commit, say "quit" to
+stop. Everything stays on your machine: mic → local STT → local matcher →
+executor. The only network call is the LLM tier for *novel* commands.
+
+## Troubleshooting
+
+```sh
+uv run axstream --doctor    # checks matcher, driver, macro store — with fixes
+uv run pytest tests         # the suite
 ```
 
 <Cards>
   <Card title="Integrate your STT" href="/docs/integrate" description="You own audio → text; axstream owns text → action." />
   <Card title="The Spec" href="/docs/spec" description="The canonical wire format and execution contract." />
+  <Card title="Roadmap" href="/docs/roadmap" description="What's shipped, what's next." />
 </Cards>

@@ -57,7 +57,7 @@ From the reference implementation, on a live macOS machine:
 | Full plan from a fast LLM (Groq, one burst) | ~0.4s |
 | Streaming execution vs wait-then-act | 37% wall-clock saved |
 | Instant tier: match a spoken command | ~100ms |
-| Instant-tier accuracy (fine-tuned 350M matcher) | 93% end-to-end |
+| Instant-tier accuracy ([open fine-tuned 350M matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)) | 94% end-to-end |
 
 The format is model-agnostic and transport-agnostic: any LLM that can stream
 text can produce it; any runtime that can parse a line can perform it.

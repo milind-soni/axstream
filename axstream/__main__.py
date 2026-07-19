@@ -203,6 +203,17 @@ async def _up(voice: bool) -> None:
         print("\nfix the above, or run `axstream --doctor` for details")
         sys.exit(1)
 
+    from .macros import MacroStore
+    if not MacroStore().macros:  # first run: seed the starter library
+        from .packs import load_packs
+        from .starter import STARTER
+        store = MacroStore()
+        pack_macros, _ = load_packs()
+        for m in STARTER + pack_macros:
+            store.add(m)
+        print(f"  {GREEN}seeded{RESET} {DIM}{len(store.macros)} starter macros "
+              f"(first run) -> {store.path}{RESET}")
+
     session = await Session(verbose=True).connect()
     ready = session.ready()
     fast = "on" if session.llm else "OFF (no OPENROUTER_API_KEY / GROQ_API_KEY)"

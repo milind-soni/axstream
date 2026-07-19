@@ -63,14 +63,15 @@ checks all of them:
 
 | piece | what it is | install |
 |---|---|---|
-| tiny matcher | any OpenAI-compatible server hosting a matcher model (llama-server recommended) | `brew install llama.cpp`, download a matcher GGUF, `llama-server -m <matcher>.gguf --port 8791 -ngl 99 -c 4096 --no-webui`; override with `AXSTREAM_TINY_URL` — see [Quickstart](/docs/quickstart) |
+| tiny matcher | any OpenAI-compatible server hosting a matcher model (llama-server recommended) | `brew install llama.cpp` + the open [axstream-matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher) (94% e2e); `axstream up` starts it automatically — see [Quickstart](/docs/quickstart); override with `AXSTREAM_TINY_URL` |
 | executor | [cua-driver](https://github.com/trycua/cua) — background, pid-addressed input delivery, no focus stealing | `/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"`, grant Accessibility once |
 | macro store | a JSON file of learned commands | created automatically at `~/.axstream/macros.json` |
 
-Use a **fine-tuned** matcher model: base LFM2.5-350M scores ~47% end-to-end;
-a small LoRA fine-tune reaches ~93% at the same ~100ms. A miss is always safe
-(it becomes `tier: "none"`), but the instant tier only feels magic when it
-matches.
+The default matcher is the open
+[axstream-matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
+— 94% end-to-end at ~100ms (the stock base model scores 47%). A miss is always
+safe (it becomes `tier: "none"`), but the instant tier only feels magic when
+it matches.
 
 Prefer cua's `computer-server` instead of the driver? Pass any
 `Computer`-shaped backend: `Session(computer=Computer(uri="ws://..."))`. Tests
