@@ -19,6 +19,12 @@ import re
 from typing import Any, Optional
 
 DRIVER_BIN = os.path.expanduser("~/.local/bin/cua-driver")
+DRIVER_SOCK = os.environ.get(
+    "AXSTREAM_DRIVER_SOCK",
+    os.path.expanduser("~/Library/Caches/cua-driver/cua-driver.sock"))
+
+# windows owned by these never count as "the frontmost app"
+_OVERLAY_APPS = {"Cua Driver", "CursorUIViewService", "Window Server", ""}
 
 
 class DriverError(RuntimeError):
@@ -26,24 +32,62 @@ class DriverError(RuntimeError):
 
 
 class DriverComputer:
-    def __init__(self, binary: str = DRIVER_BIN):
+    def __init__(self, binary: str = DRIVER_BIN, socket_path: str = DRIVER_SOCK):
         self.binary = binary
+        self.socket_path = socket_path
         self.target_pid: Optional[int] = None  # follows `open`
+        self._reader: Optional[asyncio.StreamReader] = None
+        self._writer: Optional[asyncio.StreamWriter] = None
 
     async def connect(self) -> None:
-        """No persistent process needed — `cua-driver call` proxies to the
-        always-running CuaDriver daemon. Kept for interface parity."""
-        return None
+        """Hold ONE connection to the daemon's raw socket — a tool call costs
+        ~0.2ms of transport vs ~100-150ms of `cua-driver call` process spawn.
+        Falls back to the subprocess path when the socket isn't there."""
+        try:
+            self._reader, self._writer = await asyncio.open_unix_connection(
+                self.socket_path)
+        except OSError:
+            self._reader = self._writer = None
 
     async def close(self) -> None:
-        return None
+        if self._writer is not None:
+            self._writer.close()
+            self._reader = self._writer = None
 
     async def tool(self, _tool_name: str, /, **args: Any) -> dict:
-        """Call a driver tool via `cua-driver call` (proxies to the warm
-        daemon in ~10ms). Faster and simpler than the persistent MCP-stdio
-        path, which added ~1s/call overhead."""
+        if self._writer is not None:
+            try:
+                return await self._tool_socket(_tool_name, args)
+            except (OSError, asyncio.IncompleteReadError):
+                await self.connect()  # one reconnect, then give it one more go
+                if self._writer is not None:
+                    return await self._tool_socket(_tool_name, args)
+        return await self._tool_subprocess(_tool_name, args)
+
+    async def _tool_socket(self, name: str, args: dict) -> dict:
+        payload = json.dumps({"method": "call", "name": name, "args": args})
+        self._writer.write(payload.encode() + b"\n")
+        await self._writer.drain()
+        line = await asyncio.wait_for(self._reader.readline(), timeout=30)
+        if not line:
+            raise OSError("driver socket closed")
+        resp = json.loads(line)
+        if not resp.get("ok"):
+            raise DriverError(f"{name}: {resp.get('error')}")
+        result = resp.get("result") or {}
+        text = " ".join(b.get("text", "") for b in result.get("content", [])
+                        if isinstance(b, dict)).strip()
+        if result.get("isError"):
+            raise DriverError(f"{name}: {text or 'driver error'}")
+        sc = result.get("structuredContent")
+        out = dict(sc) if isinstance(sc, dict) else {}
+        if text and "text" not in out:
+            out["text"] = text
+        return out
+
+    async def _tool_subprocess(self, name: str, args: dict) -> dict:
         proc = await asyncio.create_subprocess_exec(
-            self.binary, "call", _tool_name, json.dumps(args),
+            self.binary, "call", name, json.dumps(args),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         try:
@@ -51,24 +95,48 @@ class DriverComputer:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            raise DriverError(f"{_tool_name}: timed out after 30s")
+            raise DriverError(f"{name}: timed out after 30s")
         text = out.decode().strip()
         if proc.returncode != 0:
-            raise DriverError(f"{_tool_name}: {err.decode().strip() or text}")
+            raise DriverError(f"{name}: {err.decode().strip() or text}")
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             return {"text": text}
+
+    async def frontmost(self) -> tuple[Optional[int], Optional[str]]:
+        """(pid, app_name) of the frontmost real app — one ~5ms list_windows
+        call (list_apps scans the disk and costs 1.2s+; never on a hot path)."""
+        wins = await self.tool("list_windows")
+        cand = [w for w in wins.get("windows", [])
+                if w.get("is_on_screen")
+                and (w.get("app_name") or "") not in _OVERLAY_APPS]
+        if not cand:
+            return None, None
+        top = max(cand, key=lambda w: w.get("z_index", 0))
+        return top.get("pid"), top.get("app_name")
 
     # -- Executor-facing surface ------------------------------------------
 
     async def open(self, target: str) -> None:
         is_url = "://" in target or target.startswith("www.")
         if not is_url:
-            # already running? target + activate, skip the launch round-trip.
-            # (Also the ONLY path for system apps like Finder, which
-            # launch_app doesn't know but are always running.)
+            # hot path (~5ms): app already has a window on screen
             try:
+                wins = (await self.tool("list_windows")).get("windows", [])
+                mine = [w for w in wins if w.get("is_on_screen")
+                        and (w.get("app_name") or "").lower() == target.lower()]
+                if mine:
+                    self.target_pid = mine[0]["pid"]
+                    others = [w for w in wins if w.get("is_on_screen")
+                              and (w.get("app_name") or "") not in _OVERLAY_APPS]
+                    top = max(others, key=lambda w: w.get("z_index", 0)) if others else None
+                    if top is not None and top.get("pid") == self.target_pid:
+                        return  # already frontmost: zero further work
+                    await self.tool("bring_to_front", pid=self.target_pid)
+                    await asyncio.sleep(0.15)
+                    return
+                # running without a window (Finder et al) — slow check, cold path
                 apps = await self.tool("list_apps")
                 running = [a for a in apps.get("apps", [])
                            if a.get("running") and a.get("pid")
@@ -113,10 +181,7 @@ class DriverComputer:
         frontmost app; get_window_state frames are already screen-global."""
         pid = self.target_pid
         if pid is None:
-            apps = await self.tool("list_apps")
-            active = [a for a in apps.get("apps", [])
-                      if a.get("active") and a.get("running")]
-            pid = active[0]["pid"] if active else None
+            pid, _ = await self.frontmost()
         empty = {"windows": [], "menubar_items": [], "dock_items": []}
         if pid is None:
             return empty
@@ -199,12 +264,10 @@ class DriverComputer:
         context-free macros ("copy that", "select all") act on whatever app
         the user is in."""
         if self.target_pid is None:
-            apps = await self.tool("list_apps")
-            active = [a for a in apps.get("apps", [])
-                      if a.get("active") and a.get("running")]
-            if not active:
+            pid, _ = await self.frontmost()
+            if pid is None:
                 raise DriverError("no target app — nothing frontmost and no `open` ran")
-            self.target_pid = active[0]["pid"]
+            self.target_pid = pid
         try:
             return await self.tool(tool_name, pid=self.target_pid, **args)
         except DriverError:

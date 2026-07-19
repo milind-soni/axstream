@@ -130,15 +130,14 @@ class Session:
         await self.computer.close()
 
     async def _refresh_frontmost(self) -> None:
-        """Best-effort cache of the frontmost app name (drives app-scoping)."""
-        if not hasattr(self.computer, "tool"):
+        """Best-effort cache of the frontmost app name (drives app-scoping).
+        ~5ms via the driver's window list."""
+        if not hasattr(self.computer, "frontmost"):
             return
         try:
-            apps = await self.computer.tool("list_apps")
-            active = [a for a in apps.get("apps", [])
-                      if a.get("active") and a.get("running")]
-            if active:
-                self._frontmost = active[0].get("name")
+            _, name = await self.computer.frontmost()
+            if name:
+                self._frontmost = name
         except Exception:  # noqa: BLE001 - scoping is an optimization
             pass
 
@@ -181,7 +180,19 @@ class Session:
         none) so the caller can decide whether to fall back."""
         t0 = time.perf_counter()
         utterance = utterance.strip()
-        hit = self.tiny.match(utterance, self._library(utterance)) if utterance else None
+        hit = None
+        if utterance:
+            # pass 1: the STABLE library (frecency + app scope, no utterance) —
+            # its prompt repeats call after call, so llama-server's prefix
+            # cache keeps this at ~90ms
+            stable = self._library()
+            hit = self.tiny.match(utterance, stable)
+            if not hit:
+                # pass 2: retrieval-selected library surfaces cold macros the
+                # stable set missed; only pay for it on a pass-1 miss
+                retrieved = self._library(utterance)
+                if {t["id"] for t in retrieved} != {t["id"] for t in stable}:
+                    hit = self.tiny.match(utterance, retrieved)
         match_ms = (time.perf_counter() - t0) * 1000
         if not hit:
             if self.llm and utterance and _looks_like_command(utterance):
