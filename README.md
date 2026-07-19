@@ -51,11 +51,13 @@ curl -L -o ~/models/LFM2.5-350M-Q4_K_M.gguf \
 llama-server -m ~/models/LFM2.5-350M-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
 /bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"   # executor (grant Accessibility)
 
-# verify, then act
-uv run python -m axstream --doctor
-uv run python -m axstream "launch safari"
-uv run python demo_replay.py                 # instant-tier demo, seeded macros
-uv run python demo_voice.py --hands-free     # speak it (uv sync --extra voice)
+# start everything with defaults and listen (auto-starts the matcher if down)
+uv run axstream up                # type commands
+uv run axstream up --voice        # speak them (uv sync --extra voice)
+
+# or piece by piece
+uv run axstream --doctor
+uv run axstream "launch safari"
 
 # tests
 uv run pytest tests

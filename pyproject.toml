@@ -12,6 +12,9 @@ dependencies = [
     "websockets>=12.0",
 ]
 
+[project.scripts]
+axstream = "axstream.__main__:main"
+
 [project.optional-dependencies]
 voice = [
     "parakeet-mlx>=0.5.2",

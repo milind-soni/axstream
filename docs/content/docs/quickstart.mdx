@@ -88,11 +88,15 @@ Grant your terminal **Accessibility** permission.
 ## 4. Run things
 
 ```sh
+# the one-liner: checks the setup, auto-starts the matcher if down, listens
+uv run axstream up            # type commands ('quit' to stop)
+uv run axstream up --voice    # speak them (needs: uv sync --extra voice)
+
 # check the setup
-uv run python -m axstream --doctor
+uv run axstream --doctor
 
 # one utterance -> one action (instant tier; JSON result on stdout)
-uv run python -m axstream "launch safari"
+uv run axstream "launch safari"
 
 # instant-tier demo with seeded macros — slot variations, timings
 uv run python demo_replay.py
