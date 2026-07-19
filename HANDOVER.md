@@ -101,10 +101,17 @@ Gotcha: `launch_app` returns the pid in PROSE text ("...(pid 6821)..."), parsed
 by `DriverComputer._extract_pid`; `tool()` first arg is positional-only to
 avoid colliding with a `name=` argument.
 
-Next: port the AX *observation* mapping (driver `get_accessibility_tree` +
-`get_window_state` -> our Snapshot shape, as the Swift app's Observer did) so
-the LLM tier can also run on the driver; then demo_learn uses DriverComputer
-for both tiers.
+DONE 2026-07-19: observation ported (`DriverComputer.ax_tree()` — list_apps
+active -> list_windows max-z window -> get_window_state, frames are already
+screen-global) and the WHOLE flywheel now runs on the driver through
+`Session.handle`: no-match -> run_task (LLM tier) -> capture.debind (late-bound
+role/title targets, never per-burst ids) -> learn -> instant replay with live
+re-binding. Live proof: "create a new tab in firefox" fast-tier 29s learned ->
+instant 103ms match/replay done. Fast-tier LLM: OpenRouter preferred (Groq free
+tier TPM-crawls to 2min+). Known gaps: compound utterances partial-match single
+macros (matcher grabs "open firefox" from "open firefox and create a new tab",
+drops the rest — data round 2 hard-negatives); fast tier ~29s needs trimming
+(observation size, parameterize second call).
 
 ## 5. THE TINY-MATCHER FINE-TUNE — DONE (2026-07-19)
 
