@@ -45,7 +45,7 @@ class DriverComputer:
         Falls back to the subprocess path when the socket isn't there."""
         try:
             self._reader, self._writer = await asyncio.open_unix_connection(
-                self.socket_path)
+                self.socket_path, limit=16 * 1024 * 1024)  # window states are big
         except OSError:
             self._reader = self._writer = None
 
@@ -58,7 +58,10 @@ class DriverComputer:
         if self._writer is not None:
             try:
                 return await self._tool_socket(_tool_name, args)
-            except (OSError, asyncio.IncompleteReadError):
+            except (OSError, asyncio.IncompleteReadError, ValueError):
+                # ValueError covers a desynced stream (oversized frame left a
+                # fragment behind) — drop the connection, never parse garbage
+                await self.close()
                 await self.connect()  # one reconnect, then give it one more go
                 if self._writer is not None:
                     return await self._tool_socket(_tool_name, args)
