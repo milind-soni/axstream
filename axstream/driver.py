@@ -77,7 +77,57 @@ class DriverComputer:
             raise DriverError(f"open {target!r}: launch_app returned no pid ({res})")
         self.target_pid = pid
         await self.tool("bring_to_front", pid=pid)
-        await asyncio.sleep(0.4)  # app settle
+        # condition wait, not a fixed sleep: an on-screen window means the app
+        # is ready for keys; cold launches (Firefox) can take seconds
+        for _ in range(25):
+            if await self._front_window(pid) is not None:
+                break
+            await asyncio.sleep(0.2)
+        await asyncio.sleep(0.2)  # brief settle after the window appears
+
+    async def _front_window(self, pid: int) -> Optional[dict]:
+        wins = await self.tool("list_windows")
+        mine = [w for w in wins.get("windows", [])
+                if w.get("pid") == pid and w.get("is_on_screen") and w.get("title") is not None]
+        return max(mine, key=lambda w: w.get("z_index", 0)) if mine else None
+
+    async def ax_tree(self, frontmost_only: bool = True, max_depth: int = 20) -> dict:
+        """Observation, mapped to the computer-server desktop-state shape that
+        Snapshot consumes. Observes the tracked pid (after an `open`) or the
+        frontmost app; get_window_state frames are already screen-global."""
+        pid = self.target_pid
+        if pid is None:
+            apps = await self.tool("list_apps")
+            active = [a for a in apps.get("apps", [])
+                      if a.get("active") and a.get("running")]
+            pid = active[0]["pid"] if active else None
+        empty = {"windows": [], "menubar_items": [], "dock_items": []}
+        if pid is None:
+            return empty
+        win = await self._front_window(pid)
+        if win is None:
+            return empty
+        self.target_pid = pid  # keys/type follow the observed app
+        state = await self.tool("get_window_state", pid=pid,
+                                window_id=win["window_id"],
+                                include_screenshot=False, max_elements=500)
+        children = []
+        for el in state.get("elements", []):
+            if el.get("role") == "AXWindow":
+                continue
+            f = el.get("frame") or {}
+            children.append({
+                "role": el.get("role", ""),
+                "name": el.get("label") or "",
+                "value": "" if el.get("value") is None else str(el.get("value")),
+                "enabled": True,
+                "absolute_position": f"{f.get('x', 0)};{f.get('y', 0)}",
+                "size": f"{f.get('w', 0)};{f.get('h', 0)}",
+                "children": [],
+            })
+        title = win.get("title") or "window"
+        return {"windows": [{"title": title, "children": children}],
+                "menubar_items": [], "dock_items": []}
 
     @staticmethod
     def _extract_pid(res: dict) -> Optional[int]:

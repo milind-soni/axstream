@@ -13,9 +13,23 @@ import os
 import sys
 
 
+def _load_env() -> None:
+    """Pick up .env from the CWD or the repo root (dev convenience)."""
+    for p in (".env", os.path.join(os.path.dirname(__file__), "..", ".env")):
+        if not os.path.exists(p):
+            continue
+        for line in open(p):
+            if "=" in line:
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip().strip("'\"")
+                if k and v and k not in os.environ:
+                    os.environ[k] = v
+
+
 async def run_utterances(utterances) -> None:
     from .session import Session
 
+    _load_env()
     session = await Session().connect()
     try:
         for u in utterances:

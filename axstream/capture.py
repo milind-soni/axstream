@@ -90,6 +90,31 @@ def _extract_json(text: str) -> Optional[dict]:
         return None
 
 
+def debind(actions: list[dict]) -> list[dict]:
+    """Rewrite per-burst element-id targets to late-bound role/title targets.
+    Snapshot ids (e4) are meaningless outside the burst that created them; a
+    macro that stores them can never replay. The executor records what an id
+    resolved to — bake that in as the durable target."""
+    out: list[dict] = []
+    for op in actions:
+        target = op.get("target")
+        if (isinstance(target, dict) and isinstance(target.get("ax"), dict)
+                and target["ax"].get("id")):
+            ax = None
+            r = op.get("resolved_ax")
+            if isinstance(r, dict) and (r.get("role") or r.get("title")):
+                ax = {k: v for k, v in r.items() if v}
+            else:
+                m = re.match(r"(\S+) '(.*)'$", op.get("resolved", ""))
+                if m:
+                    ax = {"role": m.group(1), "title": m.group(2)}
+            if ax:
+                op = {**op, "target": {"ax": ax}}
+        out.append({k: v for k, v in op.items()
+                    if k not in ("resolved", "resolved_ax")})
+    return out
+
+
 def infer_guard(actions: list[dict]) -> Optional[dict]:
     """A cheap default guard: the first ax-targeted action's element must
     resolve before we trust the replay. Slot-free targets make the best guards."""

@@ -27,24 +27,55 @@ Config (constructor args, env-overridable):
 
 from __future__ import annotations
 
+import os
 import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .ax import Snapshot
+from .capture import debind, infer_guard, parameterize
 from .driver import DriverComputer
 from .executor import Executor
+from .llm import stream_openai_compat
 from .macros import Macro, MacroStore
+from .runner import run_task
 from .tiny import TinyMatcher
+
+
+def _default_llm() -> Optional[Callable]:
+    """Pick the fast-tier model from the env: OpenRouter first (paid, no
+    free-tier rate crawl), then Groq. None disables the fast tier."""
+    or_key = os.environ.get("OPENROUTER_API_KEY")
+    groq_key = os.environ.get("GROQ_API_KEY")
+    if or_key:
+        def factory(system: str, user: str):
+            return stream_openai_compat(
+                system, user, model="qwen/qwen3.6-27b", api_key=or_key,
+                base_url="https://openrouter.ai/api/v1",
+                extra={"reasoning": {"enabled": False}},
+            )
+        return factory
+    if groq_key:
+        def factory(system: str, user: str):
+            return stream_openai_compat(
+                system, user, model="qwen/qwen3.6-27b", api_key=groq_key,
+                base_url="https://api.groq.com/openai/v1",
+                extra={"reasoning_effort": "none"},
+            )
+        return factory
+    return None
 
 
 class Session:
     def __init__(self, matcher_url: Optional[str] = None,
                  macros_path: str = "~/.axstream/macros.json",
-                 computer: Any = None, allow_risky: bool = False):
+                 computer: Any = None, allow_risky: bool = False,
+                 llm: Optional[Callable] = None, max_bursts: int = 4):
         self.store = MacroStore(path=macros_path)
         self.tiny = TinyMatcher(**({"url": matcher_url} if matcher_url else {}))
         self.computer = computer if computer is not None else DriverComputer()
         self.allow_risky = allow_risky
+        self.llm = llm if llm is not None else _default_llm()
+        self.max_bursts = max_bursts
 
     async def connect(self) -> "Session":
         await self.computer.connect()
@@ -71,6 +102,8 @@ class Session:
         hit = self.tiny.match(utterance, self.store.templates()) if utterance else None
         match_ms = (time.perf_counter() - t0) * 1000
         if not hit:
+            if self.llm and utterance:
+                return await self._fast_tier(utterance, t0, match_ms)
             return {"tier": "none", "match_ms": round(match_ms), "total_ms": round(match_ms)}
 
         plan = self.store.resolve(hit["template"], hit.get("slots", {}))
@@ -82,6 +115,41 @@ class Session:
             "slots": hit.get("slots", {}),
             "status": result.status,
             "reason": result.reason,
+            "match_ms": round(match_ms),
+            "total_ms": round((time.perf_counter() - t0) * 1000),
+        }
+
+    async def _fast_tier(self, utterance: str, t0: float, match_ms: float) -> dict:
+        """No macro matched: let the LLM plan and execute over the live screen,
+        then capture the success as a macro so next time is instant."""
+        executed: list[dict] = []
+
+        def collect(e: dict) -> None:
+            if e.get("kind") == "executed":
+                executed.append(e["op"])
+
+        results = await run_task(self.computer, utterance, self.llm,
+                                 max_bursts=self.max_bursts,
+                                 allow_risky=self.allow_risky,
+                                 verbose=False, on_event=collect)
+        status = results[-1].status if results else "aborted"
+        learned = None
+        if executed and status in ("done", "observe"):
+            try:
+                macro_dict = await parameterize(utterance, debind(executed), self.llm)
+            except Exception:  # noqa: BLE001 - learning is best-effort
+                macro_dict = None
+            if macro_dict:
+                macro_dict.setdefault("guard", infer_guard(macro_dict["actions"]))
+                self.learn(Macro(**{k: macro_dict[k] for k in
+                                    ("id", "description", "slots", "examples",
+                                     "actions", "guard")}))
+                learned = macro_dict["id"]
+        return {
+            "tier": "fast",
+            "status": status,
+            "actions": len(executed),
+            "learned": learned,
             "match_ms": round(match_ms),
             "total_ms": round((time.perf_counter() - t0) * 1000),
         }
