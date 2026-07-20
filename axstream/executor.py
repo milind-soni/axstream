@@ -119,6 +119,9 @@ class Executor:
             return True
 
         op = event[1]
+        # the line just committed (newline arrived) — emit before executing so
+        # callers can render the stream as it happens
+        self._emit(result, "line_committed", op=op)
         if op["op"] == "observe":
             result.status = "observe"
             self._emit(result, "observe_requested")

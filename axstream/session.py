@@ -249,9 +249,17 @@ class Session:
         if self.verbose:
             print(f"no macro  ({round(match_ms)}ms) -> llm", flush=True)
 
+        import json as _json
+
         def on_event(e: dict) -> None:
             collect(e)
-            if self.verbose and e.get("kind") == "executed":
+            if not self.verbose:
+                return
+            kind = e.get("kind")
+            if kind == "line_committed":
+                # the raw axstream line, the moment its newline arrives
+                print(_json.dumps(e["op"], separators=(",", ":")), flush=True)
+            elif kind == "executed":
                 ms = (e["t_done"] - e["t_start"]) * 1000
                 print(f"  {_op_line(e['op']):<40s} {ms:>5.0f}ms", flush=True)
 
