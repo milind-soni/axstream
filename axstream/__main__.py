@@ -180,16 +180,13 @@ def _ensure_driver() -> bool:
 def _print_result(res: dict) -> None:
     tier = res.get("tier")
     if tier == "instant":
-        print(f"  {GREEN}⚡ instant{RESET} [{res['template']}] slots={res['slots']} "
-              f"{DIM}{res['status']} · match {res['match_ms']}ms · "
-              f"total {res['total_ms']}ms · no LLM{RESET}\n")
+        status = "done" if res["status"] == "done" else res["status"]
+        print(f"{status}  {res['total_ms'] / 1000:.1f}s  no llm\n")
     elif tier == "fast":
-        learning = " · learning it in the background" if res.get("learning") else ""
-        print(f"  {YELLOW}🐢 fast{RESET} {res['actions']} actions · {res['status']} "
-              f"{DIM}· total {res['total_ms'] / 1000:.1f}s{learning}{RESET}\n")
+        tail = "  learning" if res.get("learning") else ""
+        print(f"{res['status']}  {res['total_ms'] / 1000:.1f}s{tail}\n")
     else:
-        print(f"  {DIM}not understood ({res['match_ms']}ms) — no macro matched "
-              f"and no fast-tier LLM key configured{RESET}\n")
+        print(f"no macro  ({res['match_ms']}ms)\n")
 
 
 async def _up(voice: bool) -> None:
@@ -261,7 +258,7 @@ async def _voice_loop(session) -> None:
         u = text.strip().lower().rstrip(".!?")
         if not u:
             continue
-        print(f"» {u}  {DIM}stt {timing['transcribe_ms']:.0f}ms{RESET}")
+        print(f"» {u}")
         if u in ("quit", "exit", "stop"):
             break
         try:

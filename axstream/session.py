@@ -84,10 +84,19 @@ def _op_line(op: dict) -> str:
     """One terse line per spec action, placeholders and all."""
     do = op.get("do", op.get("op"))
     target = op.get("target")
-    if isinstance(target, dict) and "ax" in target:
-        ax = target["ax"]
-        target = f"{ax.get('role', '')} {ax.get('title') or ax.get('id') or ''!r}".strip()
-    detail = target or op.get("text") or op.get("keys") or op.get("ms") or ""
+    if isinstance(target, dict):
+        if "ax" in target:
+            ax = target["ax"]
+            target = (f"{ax.get('role', '')} {ax.get('title') or ax.get('id') or ''}"
+                      .strip())
+        elif "x" in target:
+            target = f"{target['x']},{target['y']}"
+    keys = op.get("keys")
+    if keys:
+        return f"{do} {'+'.join(str(k) for k in keys)}"
+    if do == "wait":
+        return f"wait {op.get('ms')}ms"
+    detail = target or op.get("text") or ""
     return f"{do} {detail}".strip()
 
 
@@ -95,9 +104,9 @@ def _replay_printer(e: dict) -> None:
     kind = e.get("kind")
     if kind == "executed":
         ms = (e["t_done"] - e["t_start"]) * 1000
-        print(f"    > {_op_line(e['op'])}  ({ms:.0f}ms)")
+        print(f"  {_op_line(e['op']):<40s} {ms:>5.0f}ms", flush=True)
     elif kind in ("guard_failed", "action_failed"):
-        print(f"    X {kind}: {e.get('error', e.get('guard', ''))}")
+        print(f"  failed: {e.get('error', e.get('guard', ''))}", flush=True)
 
 
 class Session:
@@ -201,9 +210,9 @@ class Session:
 
         plan = self.store.resolve(hit["template"], hit.get("slots", {}))
         if self.verbose:
-            print(f"  template [{hit['template']}] slots={hit.get('slots', {})}")
-            for op in plan["actions"]:
-                print(f"    {_op_line(op)}")
+            slots = hit.get("slots") or {}
+            slot_str = "  " + " ".join(f"{k}={v}" for k, v in slots.items()) if slots else ""
+            print(f"macro {hit['template']}{slot_str}  ({round(match_ms)}ms)", flush=True)
         executor = Executor(self.computer, Snapshot({}), allow_risky=self.allow_risky,
                             on_event=_replay_printer if self.verbose else None)
         result = await executor.replay(plan["actions"], plan.get("guard"))
@@ -237,10 +246,19 @@ class Session:
             if e.get("kind") == "executed":
                 executed.append(e["op"])
 
+        if self.verbose:
+            print(f"no macro  ({round(match_ms)}ms) -> llm", flush=True)
+
+        def on_event(e: dict) -> None:
+            collect(e)
+            if self.verbose and e.get("kind") == "executed":
+                ms = (e["t_done"] - e["t_start"]) * 1000
+                print(f"  {_op_line(e['op']):<40s} {ms:>5.0f}ms", flush=True)
+
         results = await run_task(self.computer, utterance, self.llm,
                                  max_bursts=self.max_bursts,
                                  allow_risky=self.allow_risky,
-                                 verbose=self.verbose, on_event=collect)
+                                 verbose=False, on_event=on_event)
         status = results[-1].status if results else "aborted"
         # learn ONLY from clean success: a run that hit the burst limit
         # ("observe") or aborted must never become a macro
@@ -276,8 +294,7 @@ class Session:
         macro.app = self._frontmost  # scope to the app the run landed in
         self.learn(macro)
         if self.verbose:
-            print(f"\n  ✓ learned [{macro.id}] slots={macro.slots} "
-                  f"(app: {macro.app or 'any'}) — say it again for instant")
+            print(f"learned {macro.id}", flush=True)
 
     def learn(self, macro: Macro) -> None:
         """Add a macro (e.g. parameterized from a successful LLM-tier run via

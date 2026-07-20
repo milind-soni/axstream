@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" font-family="ui-monospace,SFMono-Regular,Menlo,monospace">
+  <defs>
+    <style>
+      .panel { fill:#0d0d0f; stroke:#2a2a2e; stroke-width:1; }
+      .title { fill:#8b8b90; font-size:11px; letter-spacing:.08em; }
+      .l { fill:#79c0ff; font-size:12px; }
+      .r { fill:#7ee787; font-size:12px; }
+      .cap { fill:#8b8b90; font-size:12px; }
+    </style>
+  </defs>
+
+  <rect class="panel" x="10" y="10" width="360" height="240" rx="8"/>
+  <rect class="panel" x="390" y="10" width="360" height="240" rx="8"/>
+  <text class="title" x="30" y="38">MODEL — STREAMING</text>
+  <text class="title" x="410" y="38">EXECUTOR — ACTING</text>
+
+  <!-- left: JSONL lines committing at each newline -->
+  <text class="l" x="30" y="80">{"op":"act","do":"open","target":"Notes"}
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0" keyTimes="0;0.075;0.1;0.93;1"/></text>
+  <text class="l" x="30" y="115">{"op":"act","do":"wait","ms":500}
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0" keyTimes="0;0.25;0.275;0.93;1"/></text>
+  <text class="l" x="30" y="150">{"op":"act","do":"type","text":"buy milk"}
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0" keyTimes="0;0.425;0.45;0.93;1"/></text>
+  <text class="l" x="30" y="185">{"op":"done","status":"success"}
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0" keyTimes="0;0.6;0.625;0.93;1"/></text>
+
+  <!-- right: each action fires the moment its line's newline arrives -->
+  <text class="r" x="410" y="80">Notes opens
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0" keyTimes="0;0.15;0.175;0.93;1"/></text>
+  <text class="r" x="410" y="115">waits 500ms
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0" keyTimes="0;0.325;0.35;0.93;1"/></text>
+  <text class="r" x="410" y="150">types "buy milk"
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0" keyTimes="0;0.5;0.525;0.93;1"/></text>
+  <text class="r" x="410" y="185">finished
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0" keyTimes="0;0.675;0.7;0.93;1"/></text>
+
+  <text class="cap" x="380" y="285" text-anchor="middle">the first action runs while the model is still writing the second</text>
+</svg>

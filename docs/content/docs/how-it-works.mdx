@@ -1,0 +1,76 @@
+---
+title: How it works
+description: Three speeds, one small model, and a system that learns you.
+---
+
+You say a command. axstream does one of two things:
+
+- **It recognizes it** — a tiny local model matches your words to a command
+  it already knows, and replays it. ~100ms decision, no LLM, no network.
+- **It doesn't** — a full LLM looks at the screen, does the task once, and
+  the successful run is saved. Next time, it's recognized.
+
+Every command is slow at most once.
+
+## The stream
+
+When the LLM does plan, axstream doesn't wait for it to finish. Actions come
+out one per line, and each line executes the moment it ends:
+
+![actions execute while the model is still generating](/stream.svg)
+
+A line either arrives whole or it doesn't run — the newline is the commit
+signal, so a half-written action can never fire. This alone saves about a
+third of the wall-clock time versus wait-then-act.
+
+## The matcher — the model we trained
+
+The recognizer is a 350M-parameter model
+([open on Hugging Face](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher))
+that answers one multiple-choice question with fill-in-the-blanks:
+
+```
+in:   your command library            "which of these is it,
+      + what you just said            and what are the variable words?"
+
+out:  {"template": "open_app", "slots": {"app": "apple music"}}
+```
+
+That's its entire job. It never plans, never sees your screen, never invents
+actions. Three properties make it trustworthy:
+
+- **It can only answer from the list.** Output is grammar-constrained — an
+  answer outside your command library is impossible to generate.
+- **Slots are copied, never composed.** A slot value that you didn't actually
+  say is rejected. The matcher cannot put words in your mouth.
+- **When unsure, it says "none".** A wrong "none" costs one slow LLM call.
+  A wrong match could do the wrong thing — so it's trained to refuse.
+
+Fine-tuning took it from 47% to 94% end-to-end — trained in under 4 minutes
+on one rented GPU for about ten cents.
+
+## The library
+
+Learned commands live in one JSON file: `~/.axstream/macros.json`. Each entry
+is a template with holes:
+
+```json
+{
+  "id": "new_note_titled",
+  "examples": [{"utterance": "make a note titled standup"}],
+  "actions": [
+    {"do": "open", "target": "Notes"},
+    {"do": "key",  "keys": ["cmd", "n"]},
+    {"do": "type", "text": "{title}"}
+  ]
+}
+```
+
+The LLM writes the program once; the matcher becomes its parser forever
+after. Commands you use most float to the top (the same frequency-plus-recency
+ranking [zoxide](https://github.com/ajeetdsouza/zoxide) uses for directories),
+replays are guarded against the live screen, and anything hard to undo is
+gated behind a risk flag.
+
+That's the whole system: recognize or learn, stream instead of wait, and get
+faster the more you use it.

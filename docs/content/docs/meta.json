@@ -2,6 +2,7 @@
   "title": "Docs",
   "pages": [
     "index",
+    "how-it-works",
     "spec",
     "quickstart",
     "integrate",
