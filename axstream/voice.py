@@ -127,21 +127,36 @@ def record_hands_free(max_wait_s: float = 45.0, silence_s: float = 0.9,
                         blocksize=block) as stream:
         ambient = np.mean([np.sqrt(np.mean(stream.read(block)[0][:, 0] ** 2))
                            for _ in range(5)])
-        threshold = max(0.010, ambient * 4)
+        # relative to the room, with a low absolute floor — quiet mics put
+        # normal speech well under 0.01
+        threshold = max(0.003, ambient * 5)
 
         started = None
         quiet_blocks = 0
         t0 = time.perf_counter()
         pre_roll: list = []
+        peak = 0.0
+        hinted = False
         while True:
             data = stream.read(block)[0][:, 0]
             rms = float(np.sqrt(np.mean(data ** 2)))
+            peak = max(peak, rms)
             if started is None:
                 pre_roll.append(data)
                 pre_roll = pre_roll[-3:]
                 if rms > threshold:
                     started = time.perf_counter()
                     chunks = pre_roll + [data]
+                elif time.perf_counter() - t0 > 15 and not hinted:
+                    hinted = True
+                    if peak == 0.0:
+                        print("mic delivers silence — grant Microphone permission "
+                              "to your terminal (System Settings > Privacy > "
+                              "Microphone), then restart", flush=True)
+                    else:
+                        print(f"waiting for speech (peak level {peak:.4f}, "
+                              f"gate {threshold:.4f}) — speak up or move closer",
+                              flush=True)
                 elif time.perf_counter() - t0 > max_wait_s:
                     return np.zeros(1, dtype="float32"), 0.0
             else:
