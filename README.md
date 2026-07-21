@@ -68,6 +68,48 @@ The command above downloads the open
 (94% e2e vs the base model's 47%; misses fall back to the LLM tier).
 `AXSTREAM_TINY_URL` overrides the matcher endpoint.
 
+## File macros: agents author, axstream replays
+
+A macro is a plain text file a coding agent (Claude Code) can write, diff,
+and refine — a one-line JSON header, then axstream-spec ops, one per line.
+Files live in `./.axstream/macros/*.axstream` (project) and
+`~/.axstream/macros/` (user); slot placeholders are `{slot_name}` inside
+string args (same templating as the macro store).
+
+```
+{"name":"new_note_titled","description":"open a new note and type a title","when_to_use":"user wants a fresh note with given text","slots":{"title":{"description":"the note title","example":"standup"}},"provenance":{"source":"hand-written","created":"2026-07-22"}}
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"key","keys":["cmd","n"]}
+{"op":"act","do":"wait","ms":400}
+{"op":"act","do":"type","text":"{title}"}
+```
+
+```sh
+axstream list                                              # what's available
+axstream replay new_note_titled --slots '{"title":"standup"}' --dry   # inspect
+axstream replay new_note_titled --slots '{"title":"standup"}'         # execute
+```
+
+Replay runs through **cua-driver** (background, pid-addressed — the reliable
+edge) and prints one JSON progress object per action. Click targets may carry
+BOTH an AX label and coordinates (the SupaMaus recording-export shape); the
+label resolves against the live tree first, coordinates are the fallback, and
+each line reports which was used (`"via": "ax" | "coords" | "coords_fallback"`).
+
+The header is optional — a raw recorded draft (e.g. a SupaMaus export, ops
+only or a provenance-only header) replays as-is. On any assert/act failure the
+exit code is non-zero and the last line is the **handoff point** for the agent:
+
+```json
+{"failed_at": 2, "op": {"op": "act", "do": "click", "target": {"ax": {"title": "Save"}}}, "reason": "could not resolve target ...", "completed": 2}
+```
+
+The agent workflow: Claude writes or refines the file → `axstream replay
+... --dry` to check the resolved plan → `axstream replay ...` to execute →
+on failure, read `failed_at` and take over (or fix the macro) from that exact
+op. Format details in `axstream/macrofile.py`; replay semantics in
+`axstream/replay.py`.
+
 ## Integrate your STT
 
 You own audio → text; axstream owns text → action. Send the final utterance,
@@ -111,6 +153,8 @@ axstream/
   computer.py        computer-server WebSocket client (+ MockComputer)
   driver.py          cua-driver backend (background, pid-addressed delivery)
   macros.py          frecency-ranked parameterized macro store
+  macrofile.py       file-based macros (.axstream): header + spec JSONL
+  replay.py          `axstream replay` / `axstream list` — agent-facing CLI
   tiny.py            local tiny-model matcher (schema-constrained)
   capture.py         parameterize a successful run into a macro
   llm.py / prompt.py / runner.py / spec.py
