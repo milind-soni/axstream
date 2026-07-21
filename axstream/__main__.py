@@ -1,5 +1,9 @@
 """The axstream CLI.
 
+  axstream replay <name|path>     replay a file macro (see axstream/macrofile.py)
+          [--slots '{"k":"v"}']     fill slot placeholders
+          [--dry]                   print the resolved actions, execute nothing
+  axstream list                   macro files found, with descriptions
   axstream up                     start everything with defaults and listen
   axstream up --voice             same, but listen on the microphone
   axstream "launch safari"        one utterance, JSON result on stdout
@@ -268,9 +272,19 @@ async def _voice_loop(session) -> None:
 
 
 def main() -> None:
+    # file-macro subcommands take their own flags — dispatch before argparse
+    argv = sys.argv[1:]
+    if argv and argv[0] == "replay":
+        from .replay import cmd_replay
+        sys.exit(cmd_replay(argv[1:]))
+    if argv and argv[0] == "list":
+        from .replay import cmd_list
+        sys.exit(cmd_list(argv[1:]))
+
     parser = argparse.ArgumentParser(prog="axstream")
     parser.add_argument("utterance", nargs="?",
-                        help="one utterance to handle (or the subcommand 'up')")
+                        help="one utterance to handle (or a subcommand: "
+                             "up / seed / replay / list)")
     parser.add_argument("--voice", action="store_true",
                         help="with `up`: listen on the microphone")
     parser.add_argument("--stdin", action="store_true",

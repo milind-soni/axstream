@@ -113,6 +113,48 @@ macros (matcher grabs "open firefox" from "open firefox and create a new tab",
 drops the rest — data round 2 hard-negatives); fast tier ~29s needs trimming
 (observation size, parameterize second call).
 
+## 4c. File macros + agent-facing replay CLI (2026-07-22, branch feature/file-macros)
+
+**The reshape**: axstream is now agent-centric first. In the primary workflow
+a coding agent (Claude Code) — not the tiny matcher — authors, refines, and
+invokes macros, as plain files. The tiny matcher (tiny.py, LFM2.5) is
+**demoted to optional**: it stays fully intact and the voice tier still uses
+it, but it is no longer the front door — it's reserved for the future voice
+tier where an utterance must be matched without an agent in the loop. Nothing
+in tiny.py/llm.py/session.py changed.
+
+What landed:
+- `axstream/macrofile.py` — the `.axstream` file format: an optional one-line
+  JSON header (name, description, when_to_use, slots {name: {description,
+  example}}, provenance {source: supamaus-recording|llm-run|hand-written,
+  capture_id?, created}, optional matcher `examples`) followed by spec-0.1
+  JSONL ops. `#` comments + blank lines allowed. Slot syntax is the EXISTING
+  `{slot_name}` single-brace templating (macros._fill) — unified, no second
+  syntax. Header may alternatively live in a `<name>.json` sidecar. Dirs:
+  `./.axstream/macros/` (project) then `~/.axstream/macros/` (user).
+- `axstream/replay.py` + subcommands in `__main__.py`:
+  `axstream replay <name|path> [--slots '{"k":"v"}'] [--dry]` and
+  `axstream list [--json]`. Replay executes via **DriverComputer** (§4b —
+  never computer-server), emits one JSON progress line per action, and on
+  failure exits 1 with a final
+  `{"failed_at", "op", "reason", "completed"}` line — the agent's handoff
+  point. Click targets may carry BOTH coords and an AX label (the upcoming
+  SupaMaus draft-export shape): AX resolves first (fuzzy, live tree, one
+  refresh via Executor._refresh_and_resolve), coords are the fallback;
+  `"via"` on each line says which was used. Raw header-less drafts replay
+  as-is. `done` stops a replay; `observe` is a no-op in file replay.
+- **Frecency store untouched** (macros.py byte-identical). Making it an index
+  over files would have meant rewriting MacroStore's merge-on-save + the
+  session/tiny read paths mid-flight; instead `macrofile.to_macro/from_macro`
+  bridge the two representations (file → store for the matcher, captured
+  macro → file for agents). Wiring file macros into `Session` seeding is a
+  small follow-up if wanted.
+- Tests: 43 total (13 existing all still green + 30 new: round-trip, slot
+  fill, discovery, --dry, failure-JSON shape, ax-first/coords-fallback
+  resolution against MockComputer). Live-verified through the real
+  cua-driver: wait-op replay exits 0; failing assert prints the handoff JSON
+  and exits 1.
+
 ## 5. THE TINY-MATCHER FINE-TUNE — DONE (2026-07-19)
 
 The gap is CLOSED. LoRA fine-tune of LFM2.5-350M, trained locally on the M5
