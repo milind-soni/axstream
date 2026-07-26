@@ -101,6 +101,37 @@ Gotcha: `launch_app` returns the pid in PROSE text ("...(pid 6821)..."), parsed
 by `DriverComputer._extract_pid`; `tool()` first arg is positional-only to
 avoid colliding with a `name=` argument.
 
+DONE 2026-07-27 (branch fix/replay-ax-path): **file-macro replay clicks no
+longer use desktop-scope pixel clicks** (scope="desktop" steals the user's
+real mouse, races their pointer, and misses when windows moved since
+recording). `replay.py:_click_via_ladder` resolves click/double_click through
+a strict ladder: (1) **AX element** — fresh `DriverComputer.window_snapshot()`
+(tree-only get_window_state) before EVERY click (the driver's element cache is
+per-snapshot), fuzzy label match via `ax.resolve_window_element` (same scorer
+as `Snapshot.resolve_element`) -> `click(pid, window_id, element_index)` =
+AXUIElementPerformAction: no cursor move, no focus steal, works on
+background/off-Space windows. (2) **window-local pixel** — no AX match (or the
+AX action hard-errors, e.g. kAXErrorActionUnsupported on Notes list cells):
+re-snapshot WITH a screenshot (its dims define the driver's pixel space) and
+convert recorded global screen coords via `driver.window_pixels_from_screen`
+((g − bounds.origin) × screenshot_px/logical_bounds — the driver divides that
+scale back out and re-adds the origin), then pid-addressed
+`click(pid, window_id, x, y)`. (3) neither -> the failure handoff JSON,
+reason distinguishing "label not found in AX tree" vs "no window". Progress
+lines carry `via: ax_element|window_pixel` + the driver's own `path`/`effect`
+echo. Live-verified on the Notes macro: full run exits 0 entirely in the
+BACKGROUND (user held focus on another Space throughout); `driver_path:"ax"`
+on labeled targets. Driver-contract gotchas learned: double_click's schema
+SAYS x/y are screen coords but its implementation window-localizes them
+exactly like click when window_id is passed; Notes' toolbar buttons ("New
+Note") expose NO AXTitle/description, so they can only pixel-fallback;
+`suspected_noop` effects are surfaced but NOT auto-escalated (the press
+dispatched — a pixel retry could double-act); transient title-'' tooltip
+windows sit ABOVE the main window in z (filtered in `_front_window`), and
+window screenshots fail transiently right after a click (per-window dims
+cache + one settle-retry cover it). Only the streaming/burst tier still uses
+`DriverComputer.click` (desktop scope).
+
 DONE 2026-07-19: observation ported (`DriverComputer.ax_tree()` — list_apps
 active -> list_windows max-z window -> get_window_state, frames are already
 screen-global) and the WHOLE flywheel now runs on the driver through

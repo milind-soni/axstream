@@ -1,9 +1,12 @@
-"""`axstream replay`: --dry, structured progress, and the failure handoff JSON."""
+"""`axstream replay`: --dry, structured progress, the failure handoff JSON,
+and the click/double_click resolution ladder (AX element -> window-local
+pixel -> failure)."""
 
 import asyncio
 import json
 
 from axstream.computer import MockComputer
+from axstream.driver import DriverComputer, window_pixels_from_screen
 from axstream.macrofile import parse
 from axstream.replay import cmd_list, cmd_replay, run_actions
 
@@ -14,14 +17,47 @@ FIXTURE = "\n".join([
     json.dumps({"op": "act", "do": "wait", "ms": 1}),
 ]) + "\n"
 
-# an AX tree with one Save button at (100,200) size 20x10 -> center (110,205)
-AX_FIXTURE = {
-    "windows": [{"title": "Doc", "children": [{
-        "role": "AXButton", "name": "Save", "enabled": True,
-        "absolute_position": "100;200", "size": "20;10", "children": [],
-    }]}],
-    "menubar_items": [], "dock_items": [],
-}
+# a driver-shaped window: 800x600 logical points at (100, 50), whose window
+# screenshot is 1600x1200 -> a clean 2x "Retina" pixel space
+WINDOW = {"window_id": 7, "pid": 42, "app_name": "Notes", "title": "Notes",
+          "is_on_screen": True, "z_index": 5,
+          "bounds": {"x": 100, "y": 50, "width": 800, "height": 600}}
+ELEMENTS = [
+    {"element_index": 0, "role": "AXWindow", "label": "Notes"},
+    {"element_index": 12, "role": "AXButton", "label": "New Note",
+     "frame": {"x": 550, "y": 130, "w": 30, "h": 20}},
+]
+
+
+class FakeDriver(DriverComputer):
+    """Driver-shaped mock: logs every tool call, serves canned list_windows /
+    get_window_state responses. Exercises the REAL window_snapshot /
+    click_element / click_window_pixel machinery against fixtures."""
+
+    def __init__(self, windows=None, elements=None, shot=(1600, 1200)):
+        super().__init__()
+        self.windows = [WINDOW] if windows is None else windows
+        self.elements = ELEMENTS if elements is None else elements
+        self.shot = shot
+        self.calls: list[tuple[str, dict]] = []
+
+    async def connect(self):  # pragma: no cover - nothing to connect
+        pass
+
+    async def tool(self, name, /, **args):
+        self.calls.append((name, args))
+        if name == "list_windows":
+            return {"windows": self.windows}
+        if name == "get_window_state":
+            out = {"elements": self.elements}
+            if "screenshot_out_file" in args:
+                out["screenshot_width"], out["screenshot_height"] = self.shot
+            return out
+        if name == "click" and "element_index" in args:
+            return {"path": "ax", "verified": False, "effect": "unverifiable"}
+        if name == "double_click" and "element_index" in args:
+            return {"text": "AXOpen performed on element [12]."}
+        return {"path": "cgevent", "verified": False, "effect": "unverifiable"}
 
 
 def run(actions, computer):
@@ -74,6 +110,9 @@ def test_cli_resolves_project_macro_dir(tmp_path, capsys, monkeypatch):
 
 def test_cli_list(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    # isolate from the real ~/.axstream/macros (the user dir has live macros);
+    # a HOME distinct from cwd, or the project dir would be listed twice
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     d = tmp_path / ".axstream" / "macros"
     d.mkdir(parents=True)
     (d / "note.axstream").write_text(FIXTURE)
@@ -113,34 +152,158 @@ def test_failure_json_shape_on_assert():
     assert events[-2]["ok"] is False and events[-2]["i"] == 1
 
 
-def test_click_resolves_ax_label_first():
+# -- the click resolution ladder (FakeDriver) ------------------------------
+
+def test_click_ladder_prefers_ax_element():
     op = {"op": "act", "do": "click",
-          "target": {"x": 5, "y": 5, "ax": {"role": "AXButton", "title": "Save"}}}
-    computer = MockComputer(latency=0, ax_fixture=AX_FIXTURE)
-    code, events = run([op], computer)
+          "target": {"x": 563.25, "y": 138.34, "ax": {"title": "New Note"}}}
+    d = FakeDriver()
+    code, events = run([op], d)
     assert code == 0
-    assert events[0]["via"] == "ax"
-    assert events[0]["resolved"] == "AXButton 'Save'"
-    name, params = computer.log[-1][1], computer.log[-1][2]
-    assert name == "left_click" and (params["x"], params["y"]) == (110, 205)
+    assert events[0]["via"] == "ax_element"
+    assert "New Note" in events[0]["resolved"]
+    assert events[0]["driver_path"] == "ax"  # the driver echoed the AX path
+    clicks = [args for name, args in d.calls if name == "click"]
+    assert clicks == [{"pid": 42, "window_id": 7, "element_index": 12}]
+    # macro replay must NEVER issue a desktop-scope click
+    assert all(args.get("scope") != "desktop" for _, args in d.calls)
 
 
-def test_click_falls_back_to_coordinates():
+def test_click_ladder_resnapshots_before_every_click():
+    # the driver's element_index cache is per-snapshot (click.rs contract)
+    op = {"op": "act", "do": "click", "target": {"ax": {"title": "New Note"}}}
+    d = FakeDriver()
+    code, _ = run([op, dict(op)], d)
+    assert code == 0
+    assert [n for n, _ in d.calls if n == "get_window_state"] == ["get_window_state"] * 2
+
+
+def test_click_pixel_fallback_is_window_local():
+    # no AX match -> recorded GLOBAL screen coords convert into window-local
+    # screenshot pixels: ((500-100)*2, (250-50)*2) for the 2x window at (100,50)
     op = {"op": "act", "do": "click",
-          "target": {"x": 5, "y": 7, "ax": {"role": "AXButton", "title": "Save"}}}
-    computer = MockComputer(latency=0)  # empty tree: label can't resolve
-    code, events = run([op], computer)
+          "target": {"x": 500, "y": 250, "ax": {"title": "No Such Label"}}}
+    d = FakeDriver()
+    code, events = run([op], d)
     assert code == 0
-    assert events[0]["via"] == "coords_fallback"
-    name, params = computer.log[-1][1], computer.log[-1][2]
-    assert name == "left_click" and (params["x"], params["y"]) == (5, 7)
+    assert events[0]["via"] == "window_pixel"
+    args = [a for n, a in d.calls if n == "click"][-1]
+    assert args["pid"] == 42 and args["window_id"] == 7
+    assert (args["x"], args["y"]) == (800, 400)
+    assert "element_index" not in args and args.get("scope") != "desktop"
+    # the fallback re-snapshotted WITH a screenshot to size the pixel space
+    assert any("screenshot_out_file" in a for n, a in d.calls if n == "get_window_state")
 
 
-def test_pure_coordinate_click():
-    op = {"op": "act", "do": "click", "target": {"x": 3, "y": 4}}
-    code, events = run([op], MockComputer(latency=0))
+def test_pure_coordinate_click_stays_pid_addressed():
+    op = {"op": "act", "do": "click", "target": {"x": 100, "y": 50}}
+    d = FakeDriver()
+    code, events = run([op], d)
     assert code == 0
-    assert events[0]["via"] == "coords"
+    assert events[0]["via"] == "window_pixel"
+    args = [a for n, a in d.calls if n == "click"][-1]
+    assert (args["x"], args["y"]) == (0, 0)  # the window's own origin
+    assert args.get("scope") != "desktop"
+
+
+def test_double_click_ladder_uses_element_path():
+    op = {"op": "act", "do": "double_click", "target": {"ax": {"title": "New Note"}}}
+    d = FakeDriver()
+    code, events = run([op], d)
+    assert code == 0
+    assert events[0]["via"] == "ax_element"
+    args = [a for n, a in d.calls if n == "double_click"][-1]
+    assert args == {"pid": 42, "window_id": 7, "element_index": 12}
+
+
+def test_double_click_pixel_fallback_window_local():
+    op = {"op": "act", "do": "double_click", "target": {"x": 500, "y": 250}}
+    d = FakeDriver()
+    code, events = run([op], d)
+    assert code == 0
+    assert events[0]["via"] == "window_pixel"
+    args = [a for n, a in d.calls if n == "double_click"][-1]
+    assert args["pid"] == 42 and args["window_id"] == 7
+    assert (args["x"], args["y"]) == (800, 400)
+
+
+class NoPressDriver(FakeDriver):
+    """Element clicks fail hard (Notes list cells: kAXErrorActionUnsupported)."""
+
+    async def tool(self, name, /, **args):
+        if name in ("click", "double_click") and "element_index" in args:
+            self.calls.append((name, args))
+            from axstream.driver import DriverError
+            raise DriverError("click: AX action failed: "
+                              "AXUIElementPerformAction(AXPress) returned -25206")
+        return await super().tool(name, **args)
+
+
+def test_ax_action_error_falls_through_to_pixel():
+    op = {"op": "act", "do": "click",
+          "target": {"x": 500, "y": 250, "ax": {"title": "New Note"}}}
+    d = NoPressDriver()
+    code, events = run([op], d)
+    assert code == 0
+    assert events[0]["via"] == "window_pixel"
+    assert "-25206" in events[0]["note"]
+    args = [a for n, a in d.calls if n == "click"][-1]
+    assert (args["x"], args["y"]) == (800, 400) and "element_index" not in args
+
+
+def test_ax_action_error_without_coords_fails():
+    op = {"op": "act", "do": "click", "target": {"ax": {"title": "New Note"}}}
+    code, events = run([op], NoPressDriver())
+    assert code == 1
+    assert "AX element click failed" in events[-1]["reason"]
+
+
+def test_label_only_miss_fails_with_reason():
+    op = {"op": "act", "do": "click", "target": {"ax": {"title": "Ghost"}}}
+    code, events = run([op], FakeDriver())
+    assert code == 1
+    final = events[-1]
+    assert set(final) == {"failed_at", "op", "reason", "completed"}
+    assert "label not found in AX tree" in final["reason"]
+
+
+def test_no_window_fails_with_reason():
+    op = {"op": "act", "do": "click",
+          "target": {"x": 1, "y": 2, "ax": {"title": "New Note"}}}
+    code, events = run([op], FakeDriver(windows=[]))
+    assert code == 1
+    assert "no window" in events[-1]["reason"]
+
+
+def test_window_snapshot_reuses_cached_dims_on_capture_hiccup():
+    # window screenshots fail transiently (observed live right after a click);
+    # while the bounds are unchanged the previous size still describes the
+    # same pixel space, so window_snapshot serves it from cache
+    class Flaky(FakeDriver):
+        def __init__(self):
+            super().__init__()
+            self.shots = 0
+
+        async def tool(self, name, /, **args):
+            if name == "get_window_state" and "screenshot_out_file" in args:
+                self.shots += 1
+                if self.shots > 1:
+                    self.calls.append((name, args))
+                    return {"elements": self.elements}  # capture failed: no dims
+            return await super().tool(name, **args)
+
+    d = Flaky()
+    s1 = asyncio.run(d.window_snapshot(with_screenshot=True))
+    s2 = asyncio.run(d.window_snapshot(with_screenshot=True))
+    assert s1.screenshot_size == (1600, 1200)
+    assert s2.screenshot_size == (1600, 1200)
+
+
+def test_window_pixels_from_screen_conversion():
+    bounds = {"x": 100, "y": 50, "width": 800, "height": 600}
+    assert window_pixels_from_screen(500, 250, bounds, (1600, 1200)) == (800, 400)
+    # 1x (non-Retina, no downscale): pixels == points
+    assert window_pixels_from_screen(500, 250, bounds, (800, 600)) == (400, 200)
 
 
 def test_done_stops_replay():

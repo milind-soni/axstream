@@ -7,7 +7,10 @@ specific pid in the background (no focus race, no full-desktop AX-walk hang),
 so replay is reliable.
 
 `open` records the launched app's pid; subsequent key/type/scroll go to that
-pid (mirrors the Swift app's targetPid). Coordinate clicks use desktop scope.
+pid (mirrors the Swift app's targetPid). File-macro replay clicks go through
+`window_snapshot` + `click_element`/`click_window_pixel` (element-addressed AX
+actions, or pid-addressed window-local pixels — never desktop scope); only the
+streaming/burst tier still uses the raw desktop-scope `click`.
 """
 
 from __future__ import annotations
@@ -16,6 +19,8 @@ import asyncio
 import json
 import os
 import re
+import tempfile
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 DRIVER_BIN = os.path.expanduser("~/.local/bin/cua-driver")
@@ -31,6 +36,46 @@ class DriverError(RuntimeError):
     pass
 
 
+@dataclass
+class WindowSnapshot:
+    """One get_window_state observation of the target app's front window.
+
+    `elements` is the driver's structured array ({element_index, role, label,
+    value, frame, ...}); pass an element_index back to click/double_click for
+    the AX-action path. `bounds` is the window frame from list_windows —
+    LOGICAL points, top-left origin, screen-global. `screenshot_size` is the
+    (w, h) of this snapshot's window screenshot — the pixel space the
+    driver's window-local pixel-click contract expects — present only when
+    the snapshot was taken with_screenshot=True."""
+
+    pid: int
+    window_id: int
+    title: str
+    elements: list[dict] = field(default_factory=list)
+    bounds: dict = field(default_factory=dict)
+    screenshot_size: Optional[tuple[int, int]] = None
+
+
+def window_pixels_from_screen(gx: float, gy: float, bounds: dict,
+                              screenshot_size: tuple[int, int]) -> tuple[float, float]:
+    """Global logical screen coords -> window-local screenshot pixels.
+
+    The driver's pixel-click contract (click.rs / double_click.rs, when
+    pid+window_id are passed): x/y are pixels of the get_window_state window
+    screenshot, top-left origin. Internally the driver multiplies by any
+    registered snapshot-downscale ratio, divides by the backing scale it
+    detects (screenshot px width / logical window width — Retina 2x), and
+    adds the window's screen origin. This is the exact inverse: subtract the
+    origin, multiply by screenshot-size / logical-bounds. Using the
+    dimensions of OUR OWN latest snapshot keeps the downscale ratio the
+    driver registered consistent with this math."""
+    w = bounds.get("width") or 0
+    h = bounds.get("height") or 0
+    sx = (screenshot_size[0] / w) if w else 1.0
+    sy = (screenshot_size[1] / h) if h else 1.0
+    return (gx - bounds.get("x", 0)) * sx, (gy - bounds.get("y", 0)) * sy
+
+
 class DriverComputer:
     def __init__(self, binary: str = DRIVER_BIN, socket_path: str = DRIVER_SOCK):
         self.binary = binary
@@ -38,6 +83,12 @@ class DriverComputer:
         self.target_pid: Optional[int] = None  # follows `open`
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
+        # last known screenshot size per (pid, window_id), with the bounds it
+        # was captured at — window captures fail transiently right after a
+        # click (observed live on Notes), and while the bounds are unchanged
+        # the previous size (and the driver's registered downscale ratio)
+        # still describe the same pixel space
+        self._shot_cache: dict[tuple[int, int], tuple[tuple, tuple[int, int]]] = {}
 
     async def connect(self) -> None:
         """Hold ONE connection to the daemon's raw socket — a tool call costs
@@ -147,8 +198,15 @@ class DriverComputer:
                 if running:
                     self.target_pid = running[0]["pid"]
                     await self.tool("bring_to_front", pid=self.target_pid)
-                    await asyncio.sleep(0.2)
-                    return
+                    # condition wait: the window may live on another Space and
+                    # takes a beat to arrive on screen after bring_to_front
+                    if await self._await_window(self.target_pid, tries=10) is not None:
+                        await asyncio.sleep(0.2)
+                        return
+                    # window never arrived (off-Space + focus contention) —
+                    # fall through to launch_app, which forces a real
+                    # activation / Space switch (observed live: bring_to_front
+                    # alone left the Notes window off screen)
             except DriverError:
                 pass  # fall through to a normal launch
         if is_url:
@@ -166,37 +224,116 @@ class DriverComputer:
         await self.tool("bring_to_front", pid=pid)
         # condition wait, not a fixed sleep: an on-screen window means the app
         # is ready for keys; cold launches (Firefox) can take seconds
-        for _ in range(25):
-            if await self._front_window(pid) is not None:
-                break
-            await asyncio.sleep(0.2)
+        await self._await_window(pid)
         await asyncio.sleep(0.2)  # brief settle after the window appears
 
+    async def _await_window(self, pid: int, tries: int = 25) -> Optional[dict]:
+        """Condition-wait for an on-screen titled window of `pid` (Space
+        switches and cold launches take a beat). Returns it, or None."""
+        for _ in range(tries):
+            win = await self._front_window(pid)
+            if win is not None:
+                return win
+            await asyncio.sleep(0.2)
+        return None
+
     async def _front_window(self, pid: int) -> Optional[dict]:
+        # non-EMPTY title required: transient tooltip/hover windows (Notes
+        # spawns 1512x33 title-'' strips ABOVE the main window in z) must
+        # never be picked as "the" window — observed live breaking replay's
+        # per-click snapshots.
+        # on-screen preferred, NOT required: when the user holds focus on
+        # another Space (observed live — activation refused while they work),
+        # the app's window stays off screen, but AX walks, element actions,
+        # and pid-addressed events all still work there — replay proceeds in
+        # the background instead of failing with "no window"
         wins = await self.tool("list_windows")
         mine = [w for w in wins.get("windows", [])
-                if w.get("pid") == pid and w.get("is_on_screen") and w.get("title") is not None]
-        return max(mine, key=lambda w: w.get("z_index", 0)) if mine else None
+                if w.get("pid") == pid and w.get("title")]
+        on_screen = [w for w in mine if w.get("is_on_screen")]
+        pick = on_screen or mine
+        return max(pick, key=lambda w: w.get("z_index", 0)) if pick else None
+
+    async def window_snapshot(self, with_screenshot: bool = False) -> Optional[WindowSnapshot]:
+        """Fresh get_window_state of the tracked (or frontmost) app's front
+        window. Take one before EVERY element-addressed action: the driver's
+        element_index cache is scoped per snapshot and replaced by the next
+        one (click.rs: "re-snapshot every turn"). with_screenshot=True also
+        captures the window screenshot — to a temp file, purely to learn its
+        pixel dimensions (and let the driver register a downscale ratio
+        consistent with them) for window-local pixel-fallback clicks."""
+        pid = self.target_pid
+        if pid is None:
+            pid, _ = await self.frontmost()
+        if pid is None:
+            return None
+        win = await self._front_window(pid)
+        if win is None:
+            return None
+        self.target_pid = pid  # keys/type follow the observed app
+        args: dict[str, Any] = dict(pid=pid, window_id=win["window_id"],
+                                    include_screenshot=False, max_elements=500)
+        if with_screenshot:
+            args["screenshot_out_file"] = os.path.join(
+                tempfile.gettempdir(), f"axstream-snap-{os.getpid()}.png")
+        state = await self.tool("get_window_state", **args)
+        size = None
+        sw, sh = state.get("screenshot_width"), state.get("screenshot_height")
+        if isinstance(sw, int) and isinstance(sh, int) and sw > 0 and sh > 0:
+            size = (sw, sh)
+        if with_screenshot:
+            key = (pid, win["window_id"])
+            bkey = tuple(sorted((win.get("bounds") or {}).items()))
+            if size is not None:
+                self._shot_cache[key] = (bkey, size)
+            else:
+                cached = self._shot_cache.get(key)
+                if cached is not None and cached[0] == bkey:
+                    size = cached[1]  # capture hiccup; bounds unchanged
+        return WindowSnapshot(pid=pid, window_id=win["window_id"],
+                              title=win.get("title") or "window",
+                              elements=state.get("elements") or [],
+                              bounds=win.get("bounds") or {},
+                              screenshot_size=size)
+
+    # -- element-addressed + window-local actions (the replay click ladder) --
+    # Each returns the driver's structured result (click.rs echoes
+    # {"path": "ax"|"cgevent"..., "effect": ...}) so callers can surface
+    # WHICH delivery path actually ran.
+
+    async def click_element(self, pid: int, window_id: int, element_index: int) -> dict:
+        """AXUIElementPerformAction on a cached element — no cursor move, no
+        focus steal, works on background windows. element_index must come
+        from the latest window_snapshot of this (pid, window_id)."""
+        return await self.tool("click", pid=pid, window_id=window_id,
+                               element_index=element_index)
+
+    async def double_click_element(self, pid: int, window_id: int, element_index: int) -> dict:
+        """AX double-click: the driver performs AXOpen when advertised, else
+        a pixel double-click at the element's center (double_click.rs)."""
+        return await self.tool("double_click", pid=pid, window_id=window_id,
+                               element_index=element_index)
+
+    async def click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
+        """Pid-addressed CGEvent click; x/y are WINDOW-LOCAL screenshot
+        pixels (see window_pixels_from_screen). Never desktop scope."""
+        return await self.tool("click", pid=pid, window_id=window_id,
+                               x=round(x, 2), y=round(y, 2))
+
+    async def double_click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
+        return await self.tool("double_click", pid=pid, window_id=window_id,
+                               x=round(x, 2), y=round(y, 2))
 
     async def ax_tree(self, frontmost_only: bool = True, max_depth: int = 20) -> dict:
         """Observation, mapped to the computer-server desktop-state shape that
         Snapshot consumes. Observes the tracked pid (after an `open`) or the
         frontmost app; get_window_state frames are already screen-global."""
-        pid = self.target_pid
-        if pid is None:
-            pid, _ = await self.frontmost()
         empty = {"windows": [], "menubar_items": [], "dock_items": []}
-        if pid is None:
+        snap = await self.window_snapshot()
+        if snap is None:
             return empty
-        win = await self._front_window(pid)
-        if win is None:
-            return empty
-        self.target_pid = pid  # keys/type follow the observed app
-        state = await self.tool("get_window_state", pid=pid,
-                                window_id=win["window_id"],
-                                include_screenshot=False, max_elements=500)
         children = []
-        for el in state.get("elements", []):
+        for el in snap.elements:
             if el.get("role") == "AXWindow":
                 continue
             f = el.get("frame") or {}
@@ -209,8 +346,7 @@ class DriverComputer:
                 "size": f"{f.get('w', 0)};{f.get('h', 0)}",
                 "children": [],
             })
-        title = win.get("title") or "window"
-        return {"windows": [{"title": title, "children": children}],
+        return {"windows": [{"title": snap.title, "children": children}],
                 "menubar_items": [], "dock_items": []}
 
     @staticmethod
@@ -249,6 +385,10 @@ class DriverComputer:
                              amount=max(1, min(50, clicks)))
 
     async def click(self, x: float, y: float) -> None:
+        # RAW desktop-pixel CGEvent click at the global HID tap — steals the
+        # real pointer. Only the streaming/burst tier still routes here; file
+        # replay (replay.py) resolves clicks through the element/window-local
+        # ladder above and must NEVER reach this.
         await self.tool("click", x=int(x), y=int(y), scope="desktop")
 
     async def double_click(self, x: float, y: float) -> None:

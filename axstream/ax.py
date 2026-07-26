@@ -77,6 +77,49 @@ def _text(v: Any) -> str:
     return str(v).replace("_", " ").strip()
 
 
+def match_score(ax: dict, role: str, title: str, description: str = "",
+                value: str = "") -> int:
+    """Fuzzy score of one candidate element against an {role?, title?} ax
+    target; 0 = no match. The shared core behind Snapshot.resolve_element
+    (computer-server trees) and resolve_window_element (cua-driver
+    get_window_state elements), so both resolution paths rank identically:
+    exact title +4, substring in title/description/value +2, +1 for a role
+    constraint that matched."""
+    q_role = ax.get("role")
+    q_title = (ax.get("title") or "").lower()
+    score = 0
+    if q_role:
+        if role != q_role:
+            return 0
+        score += 1
+    if q_title:
+        if q_title == title.lower():
+            score += 4
+        elif q_title in f"{title} {description} {value}".lower():
+            score += 2
+        else:
+            return 0
+    return score
+
+
+def resolve_window_element(ax: dict, elements: list[dict]) -> Optional[dict]:
+    """Fuzzy-resolve an ax target against the structured `elements` array of
+    a cua-driver get_window_state snapshot ({element_index, role, label,
+    value, frame, ...}). Returns the best-scoring element dict — carrying the
+    element_index to click — or None. Same scoring as
+    Snapshot.resolve_element."""
+    best_score = 0
+    best: Optional[dict] = None
+    for el in elements:
+        if not isinstance(el, dict) or el.get("element_index") is None:
+            continue
+        score = match_score(ax, el.get("role") or "", el.get("label") or "",
+                            "", str(el.get("value") or ""))
+        if score > best_score:
+            best_score, best = score, el
+    return best
+
+
 class Snapshot:
     """A flattened observation of the desktop, with stable per-burst element ids."""
 
@@ -161,23 +204,9 @@ class Snapshot:
     def resolve_element(self, ax: dict) -> Optional[AxElement]:
         if ax.get("id"):
             return self._by_id.get(ax["id"])
-        role = ax.get("role")
-        title = (ax.get("title") or "").lower()
         best: tuple[int, Optional[AxElement]] = (0, None)
         for el in self.elements:
-            score = 0
-            if role:
-                if el.role != role:
-                    continue
-                score += 1
-            if title:
-                hay = f"{el.title} {el.description} {el.value}".lower()
-                if title == el.title.lower():
-                    score += 4
-                elif title in hay:
-                    score += 2
-                else:
-                    continue
+            score = match_score(ax, el.role, el.title, el.description, el.value)
             if score > best[0]:
                 best = (score, el)
         return best[1]
