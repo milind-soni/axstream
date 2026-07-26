@@ -93,8 +93,13 @@ axstream replay new_note_titled --slots '{"title":"standup"}'         # execute
 Replay runs through **cua-driver** (background, pid-addressed — the reliable
 edge) and prints one JSON progress object per action. Click targets may carry
 BOTH an AX label and coordinates (the SupaMaus recording-export shape); the
-label resolves against the live tree first, coordinates are the fallback, and
-each line reports which was used (`"via": "ax" | "coords" | "coords_fallback"`).
+label fuzzy-resolves against a fresh window snapshot and clicks the element
+itself (`click(pid, window_id, element_index)` — an AX action: no cursor move,
+no focus steal, works on background windows); otherwise the recorded global
+coordinates are converted to window-local pixels and clicked pid-addressed —
+never a raw desktop-scope click that would steal the user's mouse. Each line
+reports which rung ran (`"via": "ax_element" | "window_pixel"`) plus the
+driver's own delivery echo (`"driver_path"`, `"effect"`).
 
 The header is optional — a raw recorded draft (e.g. a SupaMaus export, ops
 only or a provenance-only header) replays as-is. On any assert/act failure the
