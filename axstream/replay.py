@@ -280,6 +280,19 @@ def cmd_replay(argv: list[str]) -> int:
         return 2
     try:
         mf = load(path)
+        example_slots: list[str] = []
+        if args.dry:
+            # Nothing executes in a dry run, so header example values stand in
+            # for any slot the caller didn't pass — a slotted macro must be
+            # verifiable without real inputs.
+            for slot_name, spec in (mf.slots or {}).items():
+                if slot_name in slots:
+                    continue
+                example = spec.get("example") if isinstance(spec, dict) else None
+                slots[slot_name] = (
+                    str(example) if example not in (None, "") else f"<{slot_name}>"
+                )
+                example_slots.append(slot_name)
         actions = mf.fill(slots)
     except MacroFileError as e:
         _print_json({"error": str(e), "file": str(path)})
@@ -288,8 +301,11 @@ def cmd_replay(argv: list[str]) -> int:
     if args.dry:
         for i, op in enumerate(actions):
             _print_json({"i": i, "op": op, "dry": True})
-        _print_json({"dry": True, "ok": True, "macro": mf.name,
-                     "file": str(path), "actions": len(actions)})
+        summary = {"dry": True, "ok": True, "macro": mf.name,
+                   "file": str(path), "actions": len(actions)}
+        if example_slots:
+            summary["example_slots"] = example_slots
+        _print_json(summary)
         return 0
 
     from .driver import DriverComputer  # imported late: not needed for --dry

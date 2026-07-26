@@ -79,10 +79,23 @@ def test_cli_dry_on_fixture_draft(tmp_path, capsys):
     assert lines[-1]["actions"] == 2
 
 
-def test_cli_dry_missing_slot_is_usage_error(tmp_path, capsys):
+def test_cli_dry_missing_slot_fills_example(tmp_path, capsys):
+    # A dry run executes nothing, so missing slots self-fill (header example,
+    # else <name>) — a slotted macro is always verifiable without inputs.
     p = tmp_path / "note.axstream"
     p.write_text(FIXTURE)
     code = cmd_replay([str(p), "--dry"])
+    assert code == 0
+    lines = [json.loads(l) for l in capsys.readouterr().out.strip().splitlines()]
+    assert lines[0]["op"] == {"op": "act", "do": "type", "text": "<title>"}
+    assert lines[-1]["ok"] is True and lines[-1]["example_slots"] == ["title"]
+
+
+def test_cli_real_run_missing_slot_is_usage_error(tmp_path, capsys):
+    # Only --dry self-fills; a real run must still demand explicit values.
+    p = tmp_path / "note.axstream"
+    p.write_text(FIXTURE)
+    code = cmd_replay([str(p)])
     assert code == 2
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert "title" in out["error"]
