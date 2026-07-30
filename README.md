@@ -39,6 +39,10 @@ accuracy** ([open fine-tuned 350M matcher](https://huggingface.co/milsoni201/lfm
 ## Run it
 
 ```sh
+uv tool install "axstream[ocr]"   # from PyPI — or: pip install "axstream[ocr]"
+axstream install                  # wire the skill + MCP into Claude Code / Codex
+
+# or for hacking on it:
 git clone https://github.com/milind-soni/axstream && cd axstream && uv sync
 
 # dry demo — no keys, no server; proves the streaming overlap

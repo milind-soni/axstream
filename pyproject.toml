@@ -5,12 +5,20 @@ build-backend = "hatchling.build"
 [project]
 name = "axstream"
 version = "0.1.0"
-description = "Streaming JSONL action spec for computer use: execute actions while the LLM is still generating"
+description = "Fast, verified computer use for agents: a streaming JSONL action spec, a verified click ladder, and macros that make repeat tasks instant"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
+keywords = ["computer-use", "automation", "macos", "agents", "mcp", "accessibility"]
 dependencies = [
     "httpx>=0.27",
     "websockets>=12.0",
 ]
+
+[project.urls]
+Homepage = "https://axstream.dev"
+Documentation = "https://axstream.dev/docs/quickstart"
+Repository = "https://github.com/milind-soni/axstream"
 
 [project.scripts]
 axstream = "axstream.__main__:main"
