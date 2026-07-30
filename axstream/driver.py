@@ -271,6 +271,11 @@ class DriverComputer:
         if win is None:
             return None
         self.target_pid = pid  # keys/type follow the observed app
+        # max_elements is a LATENCY dial, not just a context one: measured on
+        # Notes (2.5k-note sidebar) a 2000-element walk costs ~19s per click vs
+        # ~3s at 500. Keep it low. The cost of a low cap is that a depth-first
+        # walk can truncate before reaching a toolbar — handled by targeting
+        # such elements by recorded coordinates rather than by raising this.
         args: dict[str, Any] = dict(pid=pid, window_id=win["window_id"],
                                     include_screenshot=False, max_elements=500)
         if with_screenshot:

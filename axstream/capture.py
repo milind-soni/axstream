@@ -115,6 +115,70 @@ def debind(actions: list[dict]) -> list[dict]:
     return out
 
 
+def _norm_text(s: str) -> str:
+    """Compare labels and typed text ignoring case, spacing and punctuation —
+    a recorder samples an element's label MID-KEYSTROKE, so the captured label
+    is often a truncated, space-mangled prefix of what was typed."""
+    return "".join(c for c in s.lower() if c.isalnum())
+
+
+def content_derived(label: str, typed: list[str], min_len: int = 8) -> bool:
+    """Is this label just the content the user typed (not a durable selector)?
+
+    A recording of "type X, then click the text you just typed" captures the
+    TYPED CONTENT as the element's label. Replayed with a different slot value
+    that label can never match, so every such click silently falls through to
+    stale coordinates. Detect it by prefix-overlap against the run's typed
+    text, in either direction (the label may be a truncation of the text, or
+    the text a continuation of the label).
+    """
+    a = _norm_text(label)
+    if len(a) < min_len:
+        return False  # short labels ("Save", "OK") are real selectors
+    for text in typed:
+        b = _norm_text(text)
+        if not b:
+            continue
+        head = min(len(a), len(b), 12)  # compare the stable leading run
+        if head >= min_len and a[:head] == b[:head]:
+            return True
+        if a in b or b in a:
+            return True
+    return False
+
+
+def sanitize(actions: list[dict],
+             slot_examples: Optional[list[str]] = None) -> tuple[list[dict], list[str]]:
+    """Scrub a freshly recorded action list of selectors that cannot replay.
+
+    Returns (actions, notes). Today it drops content-derived `ax` labels,
+    leaving the op's recorded coordinates as its only target so the pixel rung
+    runs deliberately instead of after a guaranteed-miss AX lookup (an op with
+    no coordinates keeps its label — a doomed lookup beats no target at all).
+    """
+    typed = [op["text"] for op in actions
+             if op.get("do") == "type" and isinstance(op.get("text"), str)]
+    # A parameterized macro types "{slot}", so the literal text that produced
+    # the recorded labels is gone from the actions — but the slot's EXAMPLE is
+    # exactly that original text. Without it, every content-derived label on a
+    # slotted macro survives (the case that made replay hit-or-miss).
+    typed += list(slot_examples or [])
+    notes: list[str] = []
+    out: list[dict] = []
+    for op in actions:
+        target = op.get("target")
+        if isinstance(target, dict) and isinstance(target.get("ax"), dict):
+            label = target["ax"].get("title") or ""
+            has_coords = "x" in target and "y" in target
+            if label and has_coords and content_derived(label, typed):
+                target = {k: v for k, v in target.items() if k != "ax"}
+                op = {**op, "target": target}
+                notes.append(f"dropped content-derived label {label!r} "
+                             f"from {op.get('do')} (kept coordinates)")
+        out.append(op)
+    return out, notes
+
+
 def infer_guard(actions: list[dict]) -> Optional[dict]:
     """A cheap default guard: the first ax-targeted action's element must
     resolve before we trust the replay. Slot-free targets make the best guards."""

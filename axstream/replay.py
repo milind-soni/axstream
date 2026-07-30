@@ -126,7 +126,12 @@ async def _click_via_ladder(computer, op: dict) -> dict:
         raise ReplayFailure(
             f"{do}: target has neither an ax label nor coordinates: {json.dumps(target)}")
 
-    snap = await computer.window_snapshot()
+    # A pixel-only op (no ax label — e.g. a label the sanitizer dropped as
+    # content-derived) needs NO element_index, so it needs no element walk:
+    # get_window_state on a list-heavy window costs seconds (measured ~3s on
+    # Notes at max_elements=500, ~19s at 2000). Take the cheap snapshot that
+    # only sizes the window, and let the shot cache serve repeat clicks.
+    snap = await computer.window_snapshot(with_screenshot=not has_label)
     if snap is None:
         raise ReplayFailure(
             f"{do}: no window — the target app has no on-screen window "
@@ -198,6 +203,11 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json) -
     reason/completed so an agent can take over at the exact op."""
     executor = Executor(computer, Snapshot({}), allow_risky=True)
     completed = 0
+    # A delivered action is not a LANDED action: the driver reports
+    # effect:"unverifiable" when it cannot read back the result (a key press,
+    # or a pixel click it cannot confirm hit anything). Counting those keeps
+    # the summary honest instead of reporting a blind run as a clean success.
+    blind: list[int] = []
     for i, op in enumerate(actions):
         kind = op.get("op")
         t0 = time.perf_counter()
@@ -225,6 +235,8 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json) -
             # kind == "act"
             if op.get("do") in ("click", "double_click"):
                 info = await _click_via_ladder(computer, op)
+                if info.get("effect") == "unverifiable" or info.get("via") == "window_pixel":
+                    blind.append(i)
                 emit({"i": i, "op": op, "ok": True,
                       "ms": int((time.perf_counter() - t0) * 1000), **info})
                 completed += 1
@@ -244,7 +256,14 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json) -
             emit({"i": i, "op": op, "ok": False, "reason": reason})
             emit({"failed_at": i, "op": op, "reason": reason, "completed": completed})
             return 1
-    emit({"ok": True, "completed": completed, "total": len(actions)})
+    summary = {"ok": True, "completed": completed, "total": len(actions)}
+    if blind:
+        # surfaced so a caller (or agent) knows to confirm the end state
+        summary["unverified_steps"] = blind
+        summary["note"] = (f"{len(blind)} step(s) could not be verified by the "
+                           "driver (blind pixel click or key press) — confirm "
+                           "the end state before trusting this run")
+    emit(summary)
     return 0
 
 
