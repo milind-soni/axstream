@@ -14,22 +14,46 @@ description: What's shipped, what's next.
   match falls back to the LLM tier. The matcher is
   [published on Hugging Face](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
   (LoRA adapter included).
+- **The verified replay ladder** — clicks resolve accessibility element →
+  OCR text anchor (on-device Apple Vision, ~25ms) → visual patch anchor
+  (template match, for icon-only controls) → window-relative pixels
+  (edge-anchored, survives window moves *and* resizes — or refuses honestly).
+  Pixel clicks skip the element walk entirely (~15ms geometry on repeats).
+  Every progress line reports which rung verified the click.
+- **Outcome assertions + the verify gate** — a macro ends with an OCR assert
+  that proves the task happened (~250ms); `axstream verify` replays once live
+  and stamps the macro `verified` (following
+  [PreAct](https://arxiv.org/abs/2606.17929)'s gate result). Saving a
+  same-task macro replaces its twin instead of accumulating duplicates.
+- **Agent integration** — `axstream install` wires a skill + MCP server into
+  Claude Code and Codex: accelerator primitives (`screen_text`, `find`,
+  `act`, `check`) plus the macro flywheel
+  (`list/replay/read/write/verify_macro`). See
+  [For coding agents](/docs/agents).
+- **`axstream bench`** — p50/p95 per op across warmed runs; regressions are a
+  number, not a feeling.
 - **A starter library** — ~180 keyboard-first macros across Finder, Safari,
   Chrome, Firefox, Mail, Notes, Calendar, Messages, Music, Terminal, VS Code,
   Slack, Zoom and system-wide commands, seeded on first run.
-- **Two execution backends** — cua's `computer-server` (WebSocket), and
-  `cua-driver` (MCP) for background, pid-addressed delivery with no focus
-  stealing.
+- **The execution backend** — `cua-driver`: background, pid-addressed
+  delivery with no focus stealing; your mouse stays yours.
 
 ## Next
 
-- **Guard coverage** — replay safety against UI drift: prefer late-bound
-  role/title targets over coordinates, `assert` before anything
-  `risk:risky`.
+- **PyPI release** — `pip install axstream` without a clone; `axstream
+  install` already handles agent wiring from the packaged wheel.
+- **Sub-second actions** — the dominant per-action cost left is a fixed 1s
+  post-action observation inside the driver; a driver-side flag takes a
+  verified click from ~1.3s to ~0.3s.
+- **Compile-from-run** — a successful `act` batch returns a ready-to-save
+  macro draft (slots lifted, guards attached) so "did it once" becomes
+  "compiled" automatically.
+- **The repair tier** — on an honest refusal, one grounded model call
+  relocates the target, verifies it, and writes the fix back into the macro:
+  macros anneal instead of rot. Models stay at the edges (learn time, repair
+  time) — never in the replay loop.
 - **Streaming voice** — hands-free local STT ships today (`axstream up
-  --voice`); next is eager execution on stable partials: scaffolding runs
-  while you're still speaking, anything irreversible waits for the end of the
-  utterance.
+  --voice`); next is eager execution on stable partials.
 - **A trained action model** — a small model fine-tuned to drive macOS from
   accessibility-tree text, replacing the hosted LLM in the fast tier. The
   spec + runtime stay open (MIT / CC BY 4.0); trained models and datasets are

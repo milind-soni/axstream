@@ -63,8 +63,8 @@ axstream/
   tiny.py          TinyMatcher — LFM2.5-350M, JSON-schema constrained match+slots
   capture.py       parameterize a successful LLM run into a macro
 demo_dry.py        no-keys streaming-overlap demo
-demo_live.py       LLM tier vs live computer-server
-demo_learn.py      THE zoxide-tier demo: slow-first (LLM) vs instant-second (replay)
+(demo_live/learn/replay/voice removed 2026-07-30 — superseded by the
+ `axstream` CLI: replay / up / up --voice / bench)
 tests/             13 tests (compiler, db-ish, macros) — all green
 docs/              Fumadocs site (deploys to axstream.dev; Root Directory=docs)
 ```
@@ -78,7 +78,7 @@ docs/              Fumadocs site (deploys to axstream.dev; Root Directory=docs)
 - **Live execution** against cua's `computer-server` (WebSocket) AND `cua-driver`
   (MCP, background/pid-addressed delivery). AX observation ~150ms scoped.
 - **The zoxide tier (just built, `9de7cc5`)**: macro store + tiny matcher +
-  capture + `executor.replay()` + `demo_learn.py`. Verified end-to-end on a
+  capture + `executor.replay()` (demo since removed). Verified end-to-end on a
   MockComputer: **~90ms match → slot-fill → replay**, no LLM.
 - **Model choice, researched**: `LFM2.5-350M` (Liquid) is the tiny matcher —
   ~65–100ms/call on Apple Silicon, purpose-built for extraction/tool-use.
@@ -96,7 +96,8 @@ keystrokes. **cua-driver is the reliable executor edge** — `axstream/driver.py
 keys/clicks to a specific pid in the **background** (no focus race). Verified
 live: typing lands with `"verified": true`, and the full instant tier
 (tiny match -> `executor.replay` -> DriverComputer) types the correct
-slot-filled text into TextEdit reliably. `demo_replay.py` is that working demo.
+slot-filled text into TextEdit reliably (the standalone demo for this was
+removed 2026-07-30; `axstream replay` is the surviving surface).
 Gotcha: `launch_app` returns the pid in PROSE text ("...(pid 6821)..."), parsed
 by `DriverComputer._extract_pid`; `tool()` first arg is positional-only to
 avoid colliding with a `name=` argument.
@@ -186,6 +187,168 @@ What landed:
   cua-driver: wait-op replay exits 0; failing assert prints the handoff JSON
   and exits 1.
 
+## 4d. FAST REPLAY LADDER — SHIPPED (2026-07-30)
+
+The reliability/latency overhaul that Phase 1+2 of the July-30 plan called
+for. Baseline on `notes-create-bold-note`: 5/5 clicks blind, 2.7–4.5s each,
+~21s total. Now: ~1.3s per pixel click, ~11.5s total, and clicks are
+target-verified whenever a rung above pixels resolves.
+
+**The new click ladder** (`replay._click_via_ladder`):
+
+1. **AX element** — unchanged (full `max_elements=500` walk, needed for
+   `element_index`).
+2. **OCR text anchor** (`ocr.py`, NEW) — `target.text` (or the ax title) is
+   located in a fresh window screenshot via Apple Vision through pyobjc
+   (`pip install 'axstream[ocr]'`, lazy import, soft-fails without it).
+   Fast pass ~25ms, accurate retry ~550ms on miss. The hit is clicked in
+   screenshot-pixel space — same PNG that defines the driver's pixel-click
+   contract, zero conversion — and counts as target-VERIFIED. Note: finds
+   rendered TEXT only; icon-only toolbar buttons (Notes "New Note") are
+   invisible to OCR too — those need `key` shortcuts or coordinates.
+3. **Window-relative pixel** (`geometry.py`, NEW) — `target.win`
+   `{fx,fy,w,h}` (or derived at load time from a header `"window":{x,y,w,h}`
+   = recorded window bounds) remaps edge-anchored into the live window:
+   survives moves AND resizes; >1.6x size change **refuses** instead of
+   clicking blind (`GeometryMismatch`). Plain global x/y stay translate-only.
+
+**Why pixel clicks got 3x faster** (`driver.window_geometry`, NEW): a pixel
+click needs no element walk — `get_window_state(max_elements=1,
+screenshot_out_file=...)` short-circuits the AX traversal at one node
+(measured 126–206ms vs ~1s at 500 on Notes) while still registering the
+driver's per-pid downscale ratio consistently. Screenshot dims are cached
+per (pid, window_id) KEYED ON WINDOW SIZE — dims and ratio depend only on
+size, so the cache survives window moves; a resize re-snapshots. Repeat
+pixel clicks cost one ~14ms list_windows + the driver click.
+
+**Cursor motion** (`driver.fast_cursor`): clicks pass
+`session="axstream-replay"` and replay sets that cursor instance to
+`glide_duration_ms=50, dwell_after_click_ms=0` once per run — the default
+speed-based glide costs ~2s/click of pure animation. Other driver clients
+keep their pretty cursor.
+
+**Honesty accounting**: `unverified_steps` now means "target never
+verified" — `window_pixel` clicks and `suspected_noop` AX presses. AX- and
+OCR-resolved clicks no longer count as blind (the driver can never verify a
+click's downstream effect; target-presence is the verification we can give).
+
+**The remaining 1s per click is the DRIVER's**: click.rs runs a
+WindowChangeDetector poll after every action that early-exits only when a
+window change appears — a quiet click always pays the full
+`DEFAULT_TIMEOUT` 1000ms. The public escape (`_skip_window_change_detection`)
+is transport-reserved and stripped from public callers
+(`sanitize_reserved_args`). FOLLOW-UP: add a public
+`observe_window_changes:false` arg to click/double_click/type/key in
+cua-driver and rebuild — repo checkout was at 0.12.4-era while the installed
+daemon is 0.12.6, so sync first. That takes a pixel click to ~0.3s.
+(Bonus found in click.rs: a background left pixel click that lands on an
+AX-pressable element returns EARLY via the PX-AX hit-test — no 1s poll —
+so some pixel clicks are already ~0.3s, data-dependent.)
+
+**Bubble-cursor snap** (`ocr.nearest_text`, same day): when a remap is
+`anchored` (window resized since recording → the point is APPROXIMATE), the
+click snaps to the nearest OCR text line within ~3% of the window width —
+but only when unambiguous (runner-up ≥1.5x farther); a wrong snap is worse
+than an honest near-miss, so dense neighborhoods stay untouched. Exact-size
+replays never snap. `all_text` on a full Notes window = 61 lines / ~170ms,
+paid only on the anchored path. Progress line gets `"snapped_to"`.
+Coordinate math itself was verified pixel-perfect via the driver's
+`debug_image_out` crosshair — "clicks not landing" is (1) stale recordings,
+(2) UI drift between observe and act, (3) apps ignoring background synthetic
+clicks — never the transform. Driver gotcha found live: a reused `session`
+id can be in the "ended" state and REJECTS tool calls — session ids are now
+unique per process (`axstream-<pid>`).
+
+**Later the same day — accelerator tools + the PreAct gate** (see the
+memory file / commit message for the full story):
+
+- **`axstream install`** — one-command onboarding: copies the packaged
+  skill (now at `axstream/skills/axstream/SKILL.md`, ships in the wheel)
+  into `~/.claude/skills` + `~/.agents/skills`, registers the MCP server in
+  Claude Code + Codex. Idempotent.
+- **`axstream mcp`** (`mcp.py`, hand-rolled stdio JSON-RPC, no SDK):
+  macro tools (list/replay/read/write/verify) PLUS accelerator primitives
+  that complement a host agent's native computer use — `screen_text`
+  (window as OCR text + coords, ~200ms, replaces screenshots), `find`
+  (click-ready target), `check` (~250ms outcome poll), `act` (a BATCH of
+  verified ops in one call). All live-verified in Claude Code and Codex
+  (Codex gotcha: its sandbox blocks the driver socket — needs approved
+  execution; documented in the skill).
+- **OCR outcome asserts** — `{"op":"assert","target":{"text":...}}` polls
+  Vision ~250ms; `demo-web-search` ends with one.
+- **`axstream bench <macro> --warmup N --runs N`** — p50/p95 per op.
+  Measured: the two ~1.0s `key` ops are 71% of a verified 2.9s run — the
+  driver poll again.
+- **The verify-before-store gate** (`gate.py`, from the PreAct paper
+  arXiv 2606.17929 — its one structural finding, worth 1.75-2.6 tasks):
+  `axstream verify <name>` / `verify_macro` = ONE live replay whose
+  TERMINAL ASSERT must pass -> `verified` stamp in the header
+  (content-hashed; editing the actions demotes to stale; `list_macros`
+  shows the state). Refuses `risk:"risky"` macros — verification
+  re-executes the task (PreAct L6), so irreversible macros are verified by
+  humans. `write_macro` upserts by task-family SIGNATURE (action shapes
+  with values blanked): a same-task twin under another name is archived to
+  `.archive/`, not left to rot. PreAct also validates choices already
+  made here: flat scripts + per-step checks ≈ state machines (their
+  ablation), embedding-level matcher suffices, cache-miss fallback
+  required; their OOD result is NEGATIVE (−11pp) — keep macros narrow.
+
+**Also shipped**: `skills/axstream/SKILL.md` — the Claude Code / Codex
+agent skill teaching the list → dry → replay → handoff loop and the macro
+format (symlinked into `~/.claude/skills/axstream`). Spec now validates
+`target.text` and `target.win`; tests 59 → 82.
+
+**Live finding (2026-07-30)**: the recorded `notes-create-bold-note` pixel
+click for "New Note" no longer lands on the button (window geometry changed
+since the 07-26 recording; the draft has no recorded window bounds). Exactly
+the failure class the header `"window"` fix addresses — SupaMaus's exporter
+should start emitting recorded window bounds in the header (one line), and
+capture hygiene should prefer `key cmd+n` over toolbar clicks.
+
+## 4e. VISUAL PATCH ANCHORS — SHIPPED (2026-07-30)
+
+Closes the ladder's icon gap: OCR verifies only RENDERED TEXT, so icon-only
+controls fell through to blind `window_pixel` clicks. New rung between OCR
+and pixels (`patch.py` + `replay --learn`, optional `axstream[patch]` =
+opencv-headless): a small grayscale crop of the control rides in the op
+target (`target.patch`, base64 PNG + fx/fy/sw/sh in SCREENSHOT-pixel space —
+same space as the driver's pixel-click contract, zero conversion) and is
+re-located near its recorded spot by template match at replay. A hit is
+target-VERIFIED, same grade as an OCR hit. `via: "patch_anchor"`.
+
+Thresholds are from live experiments on a real System Settings window
+(session 2026-07-30, saved to project memory): raw grayscale ≥0.88 (nothing
+changed → ~1.0); Canny-edge ≥0.75 (a dark↔light THEME FLIP kills raw match
+~0.2 but edges hold 0.78–0.88 at the true spot — matched second); a known
+screenshot-size change rescales the patch first (raw dies at ±10% scale,
+rescaled measures ~0.98). Search is LOCAL only (~96px+ around the expected
+fraction of the live shot) — a patch is a verifier, not a global finder; a
+global search would trade a blind click for a confident wrong one.
+
+The load-bearing part is the CAPTURE-TIME UNIQUENESS GATE
+(`patch.capture_patch`): the crop is matched against its own screenshot,
+best hit masked, and the runner-up must trail by ≥0.12 — measured: text
+labels margin 0.27–0.39, a lock icon repeated down a list margin 0.00 (8
+identical hits). Ambiguous or featureless (std<4) controls are REFUSED so a
+duplicate-looking anchor can never replay onto the wrong row. Refusal is
+silent-honest: the step just stays a blind pixel click.
+
+Learning: `axstream replay <macro> --learn` captures a patch from the
+PRE-click screenshot for every ocr_anchor / window_pixel click that lacks
+one (ax_element steps skip — no screenshot on that path, and they're already
+the most robust) and `macrofile.save_patches` merges fragments back into the
+file byte-preserving everything else (header, comments, untouched ops).
+Learned even on mid-run failure — completed steps' anchors are valid. Run
+`--learn` once while CONFIRMING the macro works: it bakes in whatever the
+screen showed (this is the PreAct paper's verify-before-store lesson — an
+unverified stored anchor makes later runs worse, arXiv:2606.17929).
+
+Tests 92 → 110 (`tests/test_patch_anchor.py`, synthetic numpy-drawn UI, a
+ShotDriver fake that writes real PNGs; skips cleanly without cv2). Suite
+green. NOT yet live-tested against a real app replay — next `--learn` run on
+`notes-create-bold-note` (after re-recording it, see §4d live finding) is
+the proving ground.
+
 ## 5. THE TINY-MATCHER FINE-TUNE — DONE (2026-07-19)
 
 The gap is CLOSED. LoRA fine-tune of LFM2.5-350M, trained locally on the M5
@@ -228,7 +391,7 @@ llama-server -m ~/models/lfm25-350m-axstream-Q4_K_M.gguf --port 8791 -ngl 99 -c 
 cd ../cua/libs/python/computer-server && uv run python -m computer_server --port 8765
 
 # the demo (GROQ_API_KEY in axstream/.env)
-cd axstream && uv run python demo_learn.py
+cd axstream && uv run axstream up   # (demo_learn.py removed 2026-07-30)
 
 # tests
 uv run pytest

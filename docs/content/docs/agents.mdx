@@ -1,0 +1,109 @@
+---
+title: For coding agents
+description: Give Claude Code or Codex fast, verified computer use — one install.
+---
+
+Coding agents drive a Mac the expensive way: screenshot → vision reasoning →
+one click → screenshot again. Each step costs seconds and tokens. axstream
+gives the agent a set of on-device primitives that collapse that loop — and a
+macro layer that makes any task it has done before replay in seconds with no
+model in the loop.
+
+## Install
+
+```sh
+uv tool install "axstream[ocr]"        # or: pip install "axstream[ocr]"
+axstream install
+```
+
+`axstream install` wires everything into every agent found on the machine,
+idempotently:
+
+- **Claude Code** — skill at `~/.claude/skills/axstream`, MCP server
+  registered via `claude mcp add`
+- **Codex** — skill at `~/.agents/skills/axstream` (the
+  [Agent Skills](https://agentskills.io) open standard), MCP server in
+  `~/.codex/config.toml`
+
+The executor daemon ([cua-driver](https://github.com/trycua/cua)) is a
+separate one-line install — `axstream --doctor` checks for it and tells you
+how.
+
+<Callout type="warn">
+Sandboxed agents (Codex's default) can read macro files but cannot reach the
+driver's unix socket — replay then looks like "daemon not running" when the
+daemon is fine. Driving the UI inherently needs approved execution outside
+the workspace sandbox. The installed skill teaches the agent this.
+</Callout>
+
+## The accelerator primitives
+
+Four MCP tools that complement the agent's native computer use — each one
+removes a *model* cost, not just a machine cost:
+
+| tool | what it replaces | cost |
+|---|---|---|
+| `screen_text` | a screenshot + vision pass — returns the window as text lines with coordinates | ~200ms, ~2KB |
+| `find` | visually scanning for one control — returns a click-ready target | ~30–600ms |
+| `act` | one model turn *per step* — executes a whole batch of verified actions in one call | one call |
+| `check` | a verification screenshot — "is this text visible yet?" | ~250ms |
+
+An `act` batch speaks the [axstream spec](/docs/spec) — open, click, type,
+key, with `assert` guards between risky steps. Clicks resolve through a
+verified ladder (accessibility element → OCR text anchor → visual patch →
+window-relative pixels), and the batch stops at the first failure with an
+exact handoff point:
+
+```json
+{"failed_at": 2, "op": {...}, "reason": "...", "completed": 2}
+```
+
+## The macro flywheel
+
+The loop the installed skill teaches:
+
+1. **Before any UI task**: `list_macros` — replay if one matches.
+2. **Novel task**: do it with one assert-guarded `act` batch.
+3. **It worked**: the op list *is* the macro — `write_macro` it.
+4. **When a re-run is safe**: `verify_macro` — the verify-before-store gate.
+5. **Forever after**: `replay_macro`, seconds, zero model calls.
+
+## The verify gate
+
+A macro can replay to 100% completion and still not do the task — stale
+coordinates click where a button used to be, and nothing complains. So
+axstream never *trusts* an unchecked macro:
+
+- Every macro should **end with an assert** that only passes when the
+  outcome is real (`{"op":"assert","target":{"text":"..."}}` — on-device OCR,
+  ~250ms).
+- `verify_macro` / `axstream verify <name>` replays it **once, live**; if the
+  terminal assert passes, the macro is stamped `verified` (shown in
+  `list_macros`). Editing the macro demotes the stamp to `stale`.
+- Verification **re-executes the task**, so the gate refuses macros carrying
+  `risk:"risky"` ops — never auto-verify anything irreversible (sending,
+  paying, deleting).
+- Saving a macro that does the same task as an existing one **replaces** it
+  (the old file is archived) — the library converges instead of rotting.
+
+This design follows [PreAct](https://arxiv.org/abs/2606.17929)
+(*Computer-Using Agents that Get Faster on Repeated Tasks*), whose central
+result is that cached-replay systems collapse without exactly this gate.
+
+## The CLI, for agents without MCP
+
+Everything above also speaks plain CLI — which is all the installed skill
+needs:
+
+```sh
+axstream list --json                 # discover (includes verified state)
+axstream replay <name> --dry         # inspect without executing
+axstream replay <name> --slots '{"query":"..."}'
+axstream verify <name>               # the gate
+axstream bench <name> --warmup 1 --runs 5   # p50/p95 per op
+```
+
+Replay emits one JSON progress object per action — `via` says how each click
+was verified (`ax_element` / `ocr_anchor` / `patch` / `window_pixel`), and
+the final summary lists `unverified_steps` so the agent knows when to
+double-check the outcome.

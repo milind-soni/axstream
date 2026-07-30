@@ -111,7 +111,19 @@ Restart `axstream up`, then say something it doesn't know:
 That's the flywheel: **every command is slow at most once.** Learned macros
 live in `~/.axstream/macros.json` — plain JSON, yours to inspect or edit.
 
-## 6. Speak instead of type
+## 6. Hook up your coding agent
+
+If you use Claude Code or Codex, one command gives the agent the skill + MCP
+tools (fast screen reading, batched verified actions, the macro flywheel):
+
+```sh
+uv run axstream install
+```
+
+Full story: **[For coding agents](/docs/agents)**. The OCR pieces (text-anchor
+clicks, outcome asserts) need `uv sync --extra ocr`.
+
+## 7. Speak instead of type
 
 ```sh
 uv sync --extra voice

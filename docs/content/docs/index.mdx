@@ -47,6 +47,17 @@ One language, three speeds:
 - **Fallback** — apps with no clean accessibility surface get driven by
   computer use.
 
+## Not just voice: your coding agent's fast hands
+
+The same replay layer plugs into **Claude Code and Codex** — one
+`axstream install` gives the agent a skill plus MCP tools: read the screen as
+text instead of screenshots (~200ms), execute whole batches of verified
+actions in one call, and compile any task it has done once into a macro that
+replays in seconds with zero model calls. Clicks resolve through a verified
+ladder (accessibility element → OCR text anchor → visual patch →
+window-relative pixels) and a macro is never trusted until a live replay
+passes its outcome assert. **[→ For coding agents](/docs/agents)**
+
 ## Measured, not promised
 
 From the reference implementation, on a live macOS machine:
@@ -65,5 +76,6 @@ text can produce it; any runtime that can parse a line can perform it.
 <Cards>
   <Card title="The Spec" href="/docs/spec" description="The action language: wire format, actions, execution contract." />
   <Card title="Quickstart" href="/docs/quickstart" description="See it run in two minutes, no keys required." />
+  <Card title="For coding agents" href="/docs/agents" description="Fast verified computer use for Claude Code & Codex — one install." />
   <Card title="Roadmap" href="/docs/roadmap" description="What's shipped, what's next." />
 </Cards>
