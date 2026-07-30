@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "axstream": {
+      "command": "uvx",
+      "args": ["--from", "axstream", "axstream", "mcp"]
+    }
+  }
+}

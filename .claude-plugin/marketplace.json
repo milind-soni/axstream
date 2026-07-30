@@ -1,0 +1,15 @@
+{
+  "name": "axstream",
+  "owner": {
+    "name": "Milind Soni",
+    "url": "https://github.com/milind-soni"
+  },
+  "plugins": [
+    {
+      "name": "axstream",
+      "source": "./",
+      "description": "Fast, verified computer use: screen-as-text perception, batched verified actions, and self-compiling macros that make repeat tasks instant. macOS."
+    }
+  ],
+  "description": "Fast, verified computer use for coding agents \u2014 screen-as-text perception, batched verified actions, self-compiling macros."
+}

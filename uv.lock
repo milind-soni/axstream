@@ -100,17 +100,15 @@ wheels = [
 
 [[package]]
 name = "axstream"
-version = "0.0.1"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "pyobjc-framework-vision", marker = "sys_platform == 'darwin'" },
     { name = "websockets" },
 ]
 
 [package.optional-dependencies]
-ocr = [
-    { name = "pyobjc-framework-vision", marker = "sys_platform == 'darwin'" },
-]
 patch = [
     { name = "opencv-python-headless" },
 ]
@@ -130,7 +128,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "opencv-python-headless", marker = "extra == 'patch'", specifier = ">=4.9" },
     { name = "parakeet-mlx", marker = "extra == 'voice'", specifier = ">=0.5.2" },
-    { name = "pyobjc-framework-vision", marker = "sys_platform == 'darwin' and extra == 'ocr'", specifier = ">=10.0" },
+    { name = "pyobjc-framework-vision", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
     { name = "sounddevice", marker = "extra == 'voice'", specifier = ">=0.5.5" },
     { name = "websockets", specifier = ">=12.0" },
 ]

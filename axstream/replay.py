@@ -503,6 +503,12 @@ def cmd_replay(argv: list[str]) -> int:
         _print_json(summary)
         return 0
 
+    if args.learn and not patchmod.available():
+        # --learn would otherwise no-op SILENTLY (measured live: a full run,
+        # zero anchors, no hint why) — say so up front, then replay normally
+        _print_json({"warning": "--learn needs opencv (pip install "
+                     "'axstream[patch]') — replaying without learning"})
+
     from .driver import DriverComputer  # imported late: not needed for --dry
 
     async def go() -> int:

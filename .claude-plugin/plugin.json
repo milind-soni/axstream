@@ -1,0 +1,10 @@
+{
+  "name": "axstream",
+  "description": "Fast, verified computer use for coding agents: read the screen as text (~200ms), execute batched verified actions, and compile any task done once into a macro that replays in seconds with zero model calls.",
+  "version": "0.1.1",
+  "author": { "name": "Milind Soni", "url": "https://github.com/milind-soni" },
+  "homepage": "https://axstream.dev",
+  "repository": "https://github.com/milind-soni/axstream",
+  "license": "MIT",
+  "keywords": ["computer-use", "automation", "macos", "mcp", "macros"]
+}

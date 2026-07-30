@@ -36,11 +36,40 @@ accuracy** ([open fine-tuned 350M matcher](https://huggingface.co/milsoni201/lfm
   is captured into the instant tier.
 - **Fallback** — AX-dead apps via computer use.
 
-## Run it
+## Install
+
+**As a Claude Code plugin** (skill + MCP tools + slash commands, one line):
+
+```sh
+claude plugin marketplace add milind-soni/axstream
+claude plugin install axstream@axstream
+```
+
+**Any other agent** (Codex, Cursor, Windsurf — via the Agent Skills standard):
+
+```sh
+npx skills add milind-soni/axstream
+```
+
+**Or the package directly:**
 
 ```sh
 uv tool install axstream          # from PyPI — or: pip install axstream
 axstream install                  # wire the skill + MCP into Claude Code / Codex
+```
+
+One prerequisite for live execution either way: the cua-driver daemon
+(`/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"` + grant
+Accessibility). `axstream --doctor` checks everything.
+
+After install, your agent gets `/axstream` (status), `/axstream-teach`
+(compile a task into a macro), `/axstream-stats` (benchmark), the fast
+primitives (screen-as-text, batched verified actions), and the macro
+flywheel.
+
+## Run it
+
+```sh
 
 # or for hacking on it:
 git clone https://github.com/milind-soni/axstream && cd axstream && uv sync

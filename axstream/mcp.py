@@ -58,6 +58,15 @@ from .macrofile import (
 
 PROTOCOL_VERSION = "2025-06-18"
 
+
+def _version() -> str:
+    try:
+        from importlib.metadata import version
+
+        return version("axstream")
+    except Exception:  # noqa: BLE001 - dev checkouts without dist metadata
+        return "dev"
+
 _APP_ARG = {"type": "string",
             "description": "App name (e.g. \"Safari\") — targets that app's "
                            "front window. Omit for the frontmost app."}
@@ -536,7 +545,7 @@ def serve() -> int:
         if method == "initialize":
             result = {"protocolVersion": PROTOCOL_VERSION,
                       "capabilities": {"tools": {}},
-                      "serverInfo": {"name": "axstream", "version": "0.0.1"}}
+                      "serverInfo": {"name": "axstream", "version": _version()}}
         elif method == "tools/list":
             result = {"tools": TOOLS}
         elif method == "tools/call":

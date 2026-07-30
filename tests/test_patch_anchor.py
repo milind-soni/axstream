@@ -279,3 +279,27 @@ def test_learn_refuses_ambiguous_spot(tmp_path):
     assert code == 0
     assert learned == {}
     assert "learned_patch" not in events[0]
+
+
+def test_learn_without_cv2_warns(tmp_path, capsys, monkeypatch):
+    # --learn with no opencv must SAY it can't learn, not silently no-op
+    # (found live: a full pip-install replay learned nothing with no hint)
+    from axstream.replay import cmd_replay
+    monkeypatch.setattr(patchmod, "_CV2", False)
+    p = tmp_path / "m.axstream"
+    p.write_text('{"op":"act","do":"wait","ms":1}\n')
+    monkeypatch.setattr("axstream.replay.DriverComputer", None, raising=False)
+    monkeypatch.chdir(tmp_path)
+    import axstream.replay as replay_module
+
+    class NoDriver:  # connect is never reached if we bail after the warning
+        def __init__(self):
+            raise RuntimeError("stop before driving")
+
+    monkeypatch.setattr("axstream.driver.DriverComputer", NoDriver)
+    try:
+        cmd_replay([str(p), "--learn"])
+    except RuntimeError:
+        pass
+    out = capsys.readouterr().out
+    assert "--learn needs opencv" in out
