@@ -212,7 +212,7 @@ async def _click_via_ladder(computer, op: dict, learn: bool = False) -> dict:
             else:
                 notes.append("OCR skipped: could not capture the window")
         else:
-            notes.append("OCR unavailable (pip install 'axstream[ocr]')")
+            notes.append("OCR unavailable (pip install axstream)")
 
     # ── Rung 2.5: visual patch anchor — verifies what OCR cannot see ──
     # (icon-only controls have no rendered text; a learned template crop
@@ -367,7 +367,7 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json,
                                 break
                     if hit is None:
                         suffix = ("" if ocr.available() else
-                                  " (OCR unavailable — pip install 'axstream[ocr]')")
+                                  " (OCR unavailable — pip install axstream)")
                         raise ReplayFailure(
                             f"assert failed: text {target['text']!r} not "
                             f"visible in the window{suffix}")

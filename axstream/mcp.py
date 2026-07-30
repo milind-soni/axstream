@@ -368,7 +368,7 @@ def _tool_screen_text(args: dict) -> dict:
     from . import ocr
 
     if not ocr.available():
-        return _text_result("OCR unavailable — pip install 'axstream[ocr]'",
+        return _text_result("OCR unavailable — pip install axstream",
                             is_error=True)
 
     async def go() -> dict:
@@ -402,7 +402,7 @@ def _tool_find(args: dict) -> dict:
     if not query:
         return _text_result("text is required", is_error=True)
     if not ocr.available():
-        return _text_result("OCR unavailable — pip install 'axstream[ocr]'",
+        return _text_result("OCR unavailable — pip install axstream",
                             is_error=True)
 
     async def go() -> dict:
@@ -439,7 +439,7 @@ def _tool_check(args: dict) -> dict:
     if not query:
         return _text_result("text is required", is_error=True)
     if not ocr.available():
-        return _text_result("OCR unavailable — pip install 'axstream[ocr]'",
+        return _text_result("OCR unavailable — pip install axstream",
                             is_error=True)
 
     async def go() -> dict:

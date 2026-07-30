@@ -9,7 +9,7 @@ pixel-click contract, so an OCR hit needs no coordinate conversion at all, and
 unlike a recorded-coordinate click it is VERIFIED — the text was just seen at
 that spot.
 
-Vision is reached through pyobjc (`pip install 'axstream[ocr]'`), keeping the
+Vision is reached through pyobjc (`pip install axstream`), keeping the
 repo pure Python — no Swift helper, no build step. Import is lazy and failure
 is soft: without pyobjc the rung reports itself unavailable and replay falls
 through to the pixel rung exactly as before.

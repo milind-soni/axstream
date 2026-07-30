@@ -10,7 +10,7 @@ about ten minutes, most of it downloads.
 ## 1. Get axstream
 
 ```sh
-uv tool install "axstream[ocr]"        # or: pip install "axstream[ocr]"
+uv tool install axstream        # or: pip install axstream
 ```
 
 Or, for hacking on it (the demos below assume the clone):
@@ -126,8 +126,8 @@ tools (fast screen reading, batched verified actions, the macro flywheel):
 uv run axstream install
 ```
 
-Full story: **[For coding agents](/docs/agents)**. The OCR pieces (text-anchor
-clicks, outcome asserts) need `uv sync --extra ocr`.
+Full story: **[For coding agents](/docs/agents)**. OCR (text-anchor clicks, outcome
+asserts) is included by default.
 
 ## 7. Speak instead of type
 

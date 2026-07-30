@@ -87,7 +87,7 @@ def doctor() -> int:
     except Exception:  # noqa: BLE001 - a broken pyobjc must not kill doctor
         ocr_ok = False
     checks.append(("ocr (text anchors + assertions)", ocr_ok, False,
-                   "pip install 'axstream[ocr]' — replay works without it "
+                   "pip install axstream — replay works without it "
                    "but loses the OCR rung and text assertions"))
 
     store = MacroStore()

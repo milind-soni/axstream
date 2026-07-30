@@ -39,7 +39,7 @@ accuracy** ([open fine-tuned 350M matcher](https://huggingface.co/milsoni201/lfm
 ## Run it
 
 ```sh
-uv tool install "axstream[ocr]"   # from PyPI — or: pip install "axstream[ocr]"
+uv tool install axstream          # from PyPI — or: pip install axstream
 axstream install                  # wire the skill + MCP into Claude Code / Codex
 
 # or for hacking on it:
@@ -105,7 +105,7 @@ user's mouse:
    windows).
 2. **OCR text anchor** — `{"text": "New Note"}` (or the ax title) is found
    as rendered text in a fresh window screenshot via on-device Apple Vision
-   (~25ms; `pip install 'axstream[ocr]'`) and clicked at the hit — a
+   (~25ms; installed by default) and clicked at the hit — a
    target-verified click even when the AX tree can't see the element.
 3. **Visual patch anchor** — a small grayscale crop of the control (learned
    once via `replay --learn`; `pip install 'axstream[patch]'`) is re-located
