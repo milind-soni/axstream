@@ -20,6 +20,14 @@ Ops:
 Targets: {"ax": {"id": "e12"}} references an element from the observation
 summary; {"ax": {"role": ..., "title": ...}} fuzzy-resolves against the live
 tree at execution time (late binding); {"x":..,"y":..} is a raw coordinate.
+Two optional target enrichments (replay ladder, see replay.py):
+{"text": "New Note"} is an OCR anchor — rendered text to locate in the window
+screenshot when the AX tree can't see the element; {"win": {"fx":..,"fy":..,
+"w":..,"h":..}} is the click as a fraction of the recorded window plus that
+window's logical size, making pixel clicks survive a window resize; {"patch":
+{"png":"<base64>","fx":..,"fy":..,"sw":..,"sh":..}} is a visual patch anchor —
+a small grayscale crop of the control re-located by template match, verifying
+icon-only targets that OCR cannot see (patch.py).
 """
 
 from __future__ import annotations
@@ -76,6 +84,18 @@ def _valid_target(target: Any, do: str) -> bool:
         return False
     if "x" in target and "y" in target:
         return isinstance(target["x"], (int, float)) and isinstance(target["y"], (int, float))
+    win = target.get("win")
+    if isinstance(win, dict) and all(
+            isinstance(win.get(k), (int, float)) for k in ("fx", "fy", "w", "h")):
+        return True
+    if isinstance(target.get("text"), str) and target["text"].strip():
+        return True
+    patch = target.get("patch")
+    if isinstance(patch, dict):
+        from .patch import valid_fragment
+
+        if valid_fragment(patch):
+            return True
     ax = target.get("ax")
     if isinstance(ax, dict):
         return bool(ax.get("id") or ax.get("role") or ax.get("title"))

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "axstream"
-version = "0.0.1"
+version = "0.1.0"
 description = "Streaming JSONL action spec for computer use: execute actions while the LLM is still generating"
 requires-python = ">=3.11"
 dependencies = [
@@ -19,6 +19,16 @@ axstream = "axstream.__main__:main"
 voice = [
     "parakeet-mlx>=0.5.2",
     "sounddevice>=0.5.5",
+]
+# the OCR text-anchor replay rung (Apple Vision via pyobjc — macOS only).
+# Optional: without it replay skips the rung and falls through to pixels.
+ocr = [
+    "pyobjc-framework-Vision>=10.0; sys_platform == 'darwin'",
+]
+# the visual patch-anchor replay rung (template-match crops via OpenCV).
+# Optional: without it replay skips the rung and falls through to pixels.
+patch = [
+    "opencv-python-headless>=4.9",
 ]
 
 

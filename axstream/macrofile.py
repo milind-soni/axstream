@@ -173,6 +173,41 @@ def dumps(mf: MacroFile) -> str:
     return "\n".join(lines) + "\n"
 
 
+def save_patches(path: str | Path, patches: dict[int, dict]) -> int:
+    """Merge learned patch anchors into a macro file in place: for each
+    {action index: target.patch fragment}, the index-th op line gets the
+    fragment set on its target. Every other byte of the file — header,
+    comments, blank lines, key order of untouched ops — is preserved
+    verbatim. Returns how many lines were rewritten. Indices count op lines
+    exactly the way parse() does, so replay's action index maps 1:1."""
+    path = Path(path).expanduser()
+    lines = path.read_text().splitlines()
+    seen_header = False
+    op_index = -1
+    written = 0
+    for i, raw in enumerate(lines):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        obj = json.loads(line)
+        if not seen_header and op_index < 0 and "op" not in obj and "do" not in obj:
+            seen_header = True
+            continue
+        op_index += 1
+        fragment = patches.get(op_index)
+        if fragment is None:
+            continue
+        target = obj.get("target")
+        if not isinstance(target, dict):
+            continue
+        target["patch"] = fragment
+        lines[i] = json.dumps(obj, ensure_ascii=False)
+        written += 1
+    if written:
+        path.write_text("\n".join(lines) + "\n")
+    return written
+
+
 def load(path: str | Path) -> MacroFile:
     path = Path(path).expanduser()
     try:

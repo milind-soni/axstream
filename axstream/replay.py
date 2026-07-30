@@ -16,14 +16,29 @@ click/double_click targets resolve through a strict preference ladder
      target's ax label, then click(pid, window_id, element_index): an
      AXUIElementPerformAction — no cursor move, no focus steal, survives
      window moves, works on background windows.
-  2. WINDOW-LOCAL PIXEL — no AX match: convert the recorded GLOBAL screen
-     coords into the driver's window-local screenshot-pixel space and click
-     pid-addressed (click(pid, window_id, x, y)).
-  3. Neither resolves — the failure JSON, reason distinguishing "label not
-     found in AX tree" from "no window".
+  2. OCR TEXT ANCHOR — the label (target.text, else the ax title) is located
+     in a fresh window screenshot via on-device Vision OCR (ocr.py) and the
+     hit's center is clicked in screenshot-pixel space. Finds "New Note"
+     when the truncated AX walk can't; the click is target-VERIFIED — the
+     text was just seen there. Soft rung: skipped without pyobjc installed.
+  3. VISUAL PATCH ANCHOR — a target.patch fragment (a small grayscale crop of
+     the control, learned via `replay --learn`) is re-located near its
+     recorded spot in the fresh window screenshot by template match
+     (patch.py: raw grayscale, then Canny edges for theme robustness).
+     Verifies ICON-ONLY targets that OCR cannot see; same verified grade as
+     an OCR hit. Soft rung: skipped without opencv installed.
+  4. WINDOW-RELATIVE PIXEL — a target.win fragment (or one derived from the
+     header's recorded "window" bounds) remaps the recorded click into the
+     live window edge-anchored (geometry.py), surviving both window moves
+     and resizes; a wildly different window REFUSES instead of clicking
+     blind. Plain global x/y without recorded window bounds translate
+     against the live origin as before (move-safe, resize-blind).
+     Pixel clicks skip the element walk entirely — window geometry comes
+     from a max_elements=1 snapshot with a size-keyed dims cache
+     (driver.window_geometry): ~15ms per repeat click vs ~3s before.
 
-Each progress line says which rung ran ("via": "ax_element" |
-"window_pixel") and echoes the driver's own delivery evidence
+Each progress line says which rung ran ("via": "ax_element" | "ocr_anchor" |
+"patch_anchor" | "window_pixel") and echoes the driver's own delivery evidence
 ("driver_path": "ax" | "cgevent" ..., "effect"). `move` still resolves
 ax-label-then-coords against the observation snapshot (it only drives the
 driver's overlay cursor).
@@ -41,9 +56,12 @@ import sys
 import time
 from typing import Callable, Optional
 
+from . import ocr
+from . import patch as patchmod
 from .ax import Snapshot, resolve_window_element
 from .driver import window_pixels_from_screen
 from .executor import Executor
+from .geometry import GeometryMismatch, annotate_window_relative, remap_offset
 from .macrofile import (
     MacroFile,
     MacroFileError,
@@ -51,6 +69,7 @@ from .macrofile import (
     load,
     macro_dirs,
     resolve_name,
+    save_patches,
 )
 
 Emit = Callable[[dict], None]
@@ -104,41 +123,46 @@ def _driver_evidence(res: object) -> dict:
     return out
 
 
-async def _click_via_ladder(computer, op: dict) -> dict:
-    """The click/double_click resolution ladder (HANDOVER §4b).
+async def _click_dispatch(computer, do: str, pid: int, window_id: int,
+                          x: float, y: float) -> dict:
+    if do == "click":
+        return await computer.click_window_pixel(pid, window_id, x, y)
+    return await computer.double_click_window_pixel(pid, window_id, x, y)
 
-    1. AX ELEMENT: fresh window snapshot -> fuzzy label match ->
-       click(pid, window_id, element_index). Re-snapshot before EVERY click:
-       the driver's element_index cache is per-snapshot (click.rs).
-    2. WINDOW-LOCAL PIXEL: recorded global screen coords converted into the
-       driver's window-local screenshot-pixel space, clicked pid-addressed.
-       NEVER scope="desktop" for macro replay.
-    3. Neither resolves -> ReplayFailure ("label not found in AX tree" vs
-       "no window").
 
-    Returns the extra progress-line fields (via / resolved / driver echo)."""
+async def _click_via_ladder(computer, op: dict, learn: bool = False) -> dict:
+    """The click/double_click resolution ladder (see the module docstring):
+    AX element -> OCR text anchor -> patch anchor -> window-relative pixel.
+    Returns the extra progress-line fields (via / resolved / notes / driver
+    echo). With learn=True, ocr_anchor and window_pixel clicks also capture
+    a visual patch anchor from the pre-click screenshot and return it under
+    "_learned_patch" for the caller to persist (patch.py; capture refuses
+    ambiguous controls, so a missing fragment is honest, not an error)."""
     do = op["do"]
     target = op.get("target") or {}
     ax = target.get("ax") if isinstance(target.get("ax"), dict) else None
     has_label = bool(ax and (ax.get("title") or ax.get("role")))
-    has_coords = "x" in target and "y" in target
-    if not has_label and not has_coords:
+    anchor = ""
+    if isinstance(target.get("text"), str):
+        anchor = target["text"].strip()
+    if not anchor and ax and isinstance(ax.get("title"), str):
+        anchor = ax["title"].strip()
+    win = target.get("win") if isinstance(target.get("win"), dict) else None
+    patch_frag = target.get("patch") if isinstance(target.get("patch"), dict) else None
+    has_coords = ("x" in target and "y" in target) or win is not None
+    if not has_label and not anchor and not has_coords:
         raise ReplayFailure(
-            f"{do}: target has neither an ax label nor coordinates: {json.dumps(target)}")
+            f"{do}: target has no ax label, no text anchor, and no "
+            f"coordinates: {json.dumps(target)}")
 
-    # A pixel-only op (no ax label — e.g. a label the sanitizer dropped as
-    # content-derived) needs NO element_index, so it needs no element walk:
-    # get_window_state on a list-heavy window costs seconds (measured ~3s on
-    # Notes at max_elements=500, ~19s at 2000). Take the cheap snapshot that
-    # only sizes the window, and let the shot cache serve repeat clicks.
-    snap = await computer.window_snapshot(with_screenshot=not has_label)
-    if snap is None:
-        raise ReplayFailure(
-            f"{do}: no window — the target app has no on-screen window "
-            "(needed for both the AX-element path and the pixel fallback)")
+    notes: list[str] = []
 
-    ax_error: Optional[str] = None
+    # ── Rung 1: AX element (the only rung that needs the element walk) ──
     if has_label:
+        snap = await computer.window_snapshot(with_screenshot=False)
+        if snap is None:
+            raise ReplayFailure(
+                f"{do}: no window — the target app has no window to act on")
         el = resolve_window_element(ax, snap.elements)
         if el is not None:
             idx = el["element_index"]
@@ -153,61 +177,166 @@ async def _click_via_ladder(computer, op: dict) -> dict:
                 return line
             except Exception as e:  # noqa: BLE001 - a hard AX error (e.g.
                 # kAXErrorActionUnsupported on Notes list cells) means the
-                # action definitively did NOT run — safe to fall through to
-                # the pixel rung when the op recorded coordinates
-                ax_error = str(e)
-                if not has_coords:
-                    raise ReplayFailure(
-                        f"{do}: AX element click failed ({ax_error}) — and the "
-                        "op carries no recorded coordinates to fall back to")
+                # action definitively did NOT run — safe to continue down
+                # the ladder
+                notes.append(f"AX element click failed ({e})")
+        else:
+            notes.append("label not found in AX tree")
 
+    # ── Rung 2: OCR text anchor — needs the window's CURRENT pixels ──
+    geom = None
+    if anchor:
+        if ocr.available():
+            geom = await computer.window_geometry(fresh_shot=True)
+            if geom is not None and geom.fresh_shot and geom.shot_path:
+                hit = ocr.find_text(geom.shot_path, anchor)
+                if hit is not None:
+                    learned = None
+                    if learn and patch_frag is None and patchmod.available():
+                        # pre-click pixels are what a future replay will see
+                        learned = patchmod.capture_patch(
+                            geom.shot_path, hit.x, hit.y)
+                    res = await _click_dispatch(
+                        computer, do, geom.pid, geom.window_id, hit.x, hit.y)
+                    line = {"via": "ocr_anchor",
+                            "resolved": (f"text {hit.text!r} @({hit.x:.0f},"
+                                         f"{hit.y:.0f})px [{hit.level} ocr, "
+                                         f"conf {hit.confidence:.2f}]")}
+                    if learned is not None:
+                        line["_learned_patch"] = learned
+                    if notes:
+                        line["note"] = "; ".join(notes)
+                    line.update(_driver_evidence(res))
+                    return line
+                notes.append(f"OCR did not find {anchor!r} on screen")
+            else:
+                notes.append("OCR skipped: could not capture the window")
+        else:
+            notes.append("OCR unavailable (pip install 'axstream[ocr]')")
+
+    # ── Rung 2.5: visual patch anchor — verifies what OCR cannot see ──
+    # (icon-only controls have no rendered text; a learned template crop
+    # re-located near its recorded spot is the same grade of verification
+    # as an OCR hit: the control was just seen there)
+    if patch_frag is not None:
+        if patchmod.available():
+            if geom is None or not (geom.fresh_shot and geom.shot_path):
+                geom = await computer.window_geometry(fresh_shot=True)
+            if geom is not None and geom.fresh_shot and geom.shot_path:
+                phit = patchmod.find_patch(geom.shot_path, patch_frag)
+                if phit is not None:
+                    res = await _click_dispatch(
+                        computer, do, geom.pid, geom.window_id, phit.x, phit.y)
+                    line = {"via": "patch_anchor",
+                            "resolved": (f"patch @({phit.x:.0f},{phit.y:.0f})px "
+                                         f"[{phit.method} match {phit.score:.2f}]")}
+                    if notes:
+                        line["note"] = "; ".join(notes)
+                    line.update(_driver_evidence(res))
+                    return line
+                notes.append("patch anchor did not match near its recorded spot")
+            else:
+                notes.append("patch skipped: could not capture the window")
+        else:
+            notes.append("patch unavailable (pip install 'axstream[patch]')")
+
+    # ── Rung 3: window-relative / window-local pixels ──
     if has_coords:
-        if snap.screenshot_size is None:
-            # re-snapshot WITH a screenshot: its dimensions define the pixel
-            # space of the driver's window-local click contract (and register
-            # a downscale ratio consistent with those dimensions)
-            snap = await computer.window_snapshot(with_screenshot=True)
-        if snap is not None and snap.screenshot_size is None:
-            # window captures fail transiently right after a click (observed
-            # live on Notes); settle briefly and retry once
-            await asyncio.sleep(0.3)
-            snap = await computer.window_snapshot(with_screenshot=True)
-        if snap is None or snap.screenshot_size is None:
+        if geom is None or geom.screenshot_size is None:
+            geom = await computer.window_geometry()
+        if geom is None:
+            raise ReplayFailure(
+                f"{do}: no window — the target app has no window to act on")
+        if geom.screenshot_size is None:
+            # window captures fail transiently right after a click or key
+            # press (observed live on Notes, sometimes for >0.3s); settle
+            # with backoff before giving up
+            for delay in (0.3, 0.6):
+                await asyncio.sleep(delay)
+                geom = await computer.window_geometry()
+                if geom is not None and geom.screenshot_size is not None:
+                    break
+        if geom is None or geom.screenshot_size is None:
             raise ReplayFailure(
                 f"{do}: pixel fallback failed — could not size the window "
                 "screenshot (get_window_state returned no dimensions)")
-        wx, wy = window_pixels_from_screen(
-            target["x"], target["y"], snap.bounds, snap.screenshot_size)
-        if do == "click":
-            res = await computer.click_window_pixel(snap.pid, snap.window_id, wx, wy)
-        else:
-            res = await computer.double_click_window_pixel(snap.pid, snap.window_id, wx, wy)
+        if (learn and patch_frag is None and patchmod.available()
+                and not (geom.fresh_shot and geom.shot_path)):
+            # learning needs the window's current pixels; only the learn run
+            # pays this extra capture
+            fresh = await computer.window_geometry(fresh_shot=True)
+            if fresh is not None and fresh.screenshot_size is not None:
+                geom = fresh
+        sw, sh = geom.screenshot_size
+        lw = geom.bounds.get("width") or 0
+        lh = geom.bounds.get("height") or 0
         line = {"via": "window_pixel"}
-        if ax_error is not None:
-            line["note"] = f"AX element click failed ({ax_error}); pid-addressed window-local pixel fallback"
-        elif has_label:
-            line["note"] = "label not found in AX tree; pid-addressed window-local pixel fallback"
+        if win is not None:
+            try:
+                dx, dy, mode = remap_offset(win, lw, lh)
+            except GeometryMismatch as e:
+                # the recorded absolute coords come from the same recording,
+                # so they are just as stale — refuse rather than click blind
+                raise ReplayFailure(f"{do}: {e}") from e
+            wx = dx * (sw / lw) if lw else dx
+            wy = dy * (sh / lh) if lh else dy
+            line["geometry"] = mode
+            if mode == "anchored" and ocr.available():
+                # bubble-cursor snap: an edge-anchored remap is APPROXIMATE
+                # (the window was resized since recording), so pull the click
+                # onto the nearest unambiguous text line within ~a control's
+                # height — a near-miss becomes a hit on the visible target,
+                # and an ambiguous neighborhood is left untouched
+                fresh = geom if geom.fresh_shot else \
+                    await computer.window_geometry(fresh_shot=True)
+                if (fresh is not None and fresh.fresh_shot
+                        and fresh.shot_path and fresh.screenshot_size):
+                    snap = ocr.nearest_text(fresh.shot_path, wx, wy,
+                                            max_dist=0.03 * fresh.screenshot_size[0])
+                    if snap is not None:
+                        geom, (wx, wy) = fresh, (snap.x, snap.y)
+                        line["snapped_to"] = snap.text
+        else:
+            wx, wy = window_pixels_from_screen(
+                target["x"], target["y"], geom.bounds, geom.screenshot_size)
+        learned = None
+        if learn and patch_frag is None and geom.fresh_shot and geom.shot_path:
+            # a blind click can still RECORD what it aimed at — the learned
+            # patch makes the NEXT run verified (or an honest miss if the
+            # spot never looked like this again)
+            learned = patchmod.capture_patch(geom.shot_path, wx, wy)
+        res = await _click_dispatch(computer, do, geom.pid, geom.window_id, wx, wy)
+        if learned is not None:
+            line["_learned_patch"] = learned
+        if notes:
+            line["note"] = "; ".join(notes)
         line.update(_driver_evidence(res))
         return line
 
     raise ReplayFailure(
-        f"{do}: label not found in AX tree: {json.dumps(ax)} — and the op "
-        "carries no recorded coordinates to fall back to")
+        f"{do}: could not resolve the target ({'; '.join(notes)}) — and the "
+        "op carries no recorded coordinates to fall back to")
 
 
-async def run_actions(actions: list[dict], computer, emit: Emit = _print_json) -> int:
+async def run_actions(actions: list[dict], computer, emit: Emit = _print_json,
+                      learn: bool = False,
+                      learned: Optional[dict[int, dict]] = None) -> int:
     """Execute a resolved (slot-filled) action list with structured progress.
 
     Returns the process exit code (0 ok, 1 failed). Emits one JSON object per
     action and a final summary — the failure summary carries failed_at/op/
-    reason/completed so an agent can take over at the exact op."""
+    reason/completed so an agent can take over at the exact op.
+
+    learn=True captures a visual patch anchor per verified-position click
+    (see _click_via_ladder); fragments land in the caller-supplied `learned`
+    dict keyed by action index, ready for macrofile.save_patches."""
     executor = Executor(computer, Snapshot({}), allow_risky=True)
     completed = 0
     # A delivered action is not a LANDED action: the driver reports
     # effect:"unverifiable" when it cannot read back the result (a key press,
     # or a pixel click it cannot confirm hit anything). Counting those keeps
     # the summary honest instead of reporting a blind run as a clean success.
-    blind: list[int] = []
+    blind: list[int] = []  # indices of steps whose TARGET was never verified
     for i, op in enumerate(actions):
         kind = op.get("op")
         t0 = time.perf_counter()
@@ -222,7 +351,32 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json) -
                 completed += 1
                 continue
             if kind == "assert":
-                ax = (op.get("target") or {}).get("ax") or {}
+                target = op.get("target") or {}
+                if isinstance(target.get("text"), str) and target["text"].strip():
+                    # OCR outcome assertion: the text must be VISIBLE in the
+                    # window (e.g. assert the results page shows the typed
+                    # query). Polls briefly — pages/UI need a beat to render.
+                    hit = None
+                    for delay in (0.0, 0.4, 0.8, 1.2):
+                        if delay:
+                            await asyncio.sleep(delay)
+                        g = await computer.window_geometry(fresh_shot=True)
+                        if g is not None and g.fresh_shot and g.shot_path:
+                            hit = ocr.find_text(g.shot_path, target["text"])
+                            if hit is not None:
+                                break
+                    if hit is None:
+                        suffix = ("" if ocr.available() else
+                                  " (OCR unavailable — pip install 'axstream[ocr]')")
+                        raise ReplayFailure(
+                            f"assert failed: text {target['text']!r} not "
+                            f"visible in the window{suffix}")
+                    emit({"i": i, "op": op, "ok": True, "via": "ocr",
+                          "resolved": f"text {hit.text!r} visible [{hit.level} ocr]",
+                          "ms": int((time.perf_counter() - t0) * 1000)})
+                    completed += 1
+                    continue
+                ax = target.get("ax") or {}
                 el = executor.snapshot.resolve_element(ax) or await executor._refresh_and_resolve(ax)
                 if el is None:
                     raise ReplayFailure(
@@ -234,8 +388,19 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json) -
                 continue
             # kind == "act"
             if op.get("do") in ("click", "double_click"):
-                info = await _click_via_ladder(computer, op)
-                if info.get("effect") == "unverifiable" or info.get("via") == "window_pixel":
+                info = await _click_via_ladder(computer, op, learn=learn)
+                fragment = info.pop("_learned_patch", None)
+                if fragment is not None and learned is not None:
+                    learned[i] = fragment
+                    info["learned_patch"] = True
+                # ax_element, ocr_anchor and patch_anchor clicks are
+                # target-VERIFIED (the element / rendered text / control
+                # pixels were just resolved in the live UI — the driver
+                # merely can't confirm the click's downstream effect);
+                # window_pixel clicks verified nothing, and a
+                # suspected_noop AX press likely did nothing at all
+                if (info.get("via") == "window_pixel"
+                        or info.get("effect") == "suspected_noop"):
                     blind.append(i)
                 emit({"i": i, "op": op, "ok": True,
                       "ms": int((time.perf_counter() - t0) * 1000), **info})
@@ -260,9 +425,10 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json) -
     if blind:
         # surfaced so a caller (or agent) knows to confirm the end state
         summary["unverified_steps"] = blind
-        summary["note"] = (f"{len(blind)} step(s) could not be verified by the "
-                           "driver (blind pixel click or key press) — confirm "
-                           "the end state before trusting this run")
+        summary["note"] = (f"{len(blind)} step(s) clicked without target "
+                           "verification (blind pixel click or suspected "
+                           "no-op) — confirm the end state before trusting "
+                           "this run")
     emit(summary)
     return 0
 
@@ -280,6 +446,11 @@ def cmd_replay(argv: list[str]) -> int:
                         help='slot values as JSON, e.g. \'{"title":"standup"}\'')
     parser.add_argument("--dry", action="store_true",
                         help="print the resolved action list without executing")
+    parser.add_argument("--learn", action="store_true",
+                        help="capture visual patch anchors for clicks that "
+                        "lack one and save them back into the macro file — "
+                        "run this once while confirming the macro works; "
+                        "later replays verify icon-only targets by patch")
     args = parser.parse_args(argv)
 
     slots: dict = {}
@@ -313,6 +484,11 @@ def cmd_replay(argv: list[str]) -> int:
                 )
                 example_slots.append(slot_name)
         actions = mf.fill(slots)
+        # a recorded "window" header key (the window bounds at capture time)
+        # makes every absolute-coordinate click resize-aware — see geometry.py
+        recorded_window = mf.extra.get("window")
+        if isinstance(recorded_window, dict):
+            actions = annotate_window_relative(actions, recorded_window)
     except MacroFileError as e:
         _print_json({"error": str(e), "file": str(path)})
         return 2
@@ -332,10 +508,116 @@ def cmd_replay(argv: list[str]) -> int:
     async def go() -> int:
         computer = DriverComputer()
         await computer.connect()
+        await computer.fast_cursor()
+        learned: dict[int, dict] = {}
         try:
-            return await run_actions(actions, computer)
+            return await run_actions(actions, computer,
+                                     learn=args.learn, learned=learned)
         finally:
             await computer.close()
+            if learned:
+                # persist even after a mid-run failure — anchors for the
+                # steps that DID click are just as valid
+                try:
+                    n = save_patches(path, learned)
+                    _print_json({"learned_patches": n, "file": str(path)})
+                except (OSError, ValueError) as e:
+                    _print_json({"learned_patches": 0,
+                                 "error": f"could not save patches: {e}"})
+
+    return asyncio.run(go())
+
+
+def cmd_bench(argv: list[str]) -> int:
+    """`axstream bench <macro>` — replay a macro N times and report per-op
+    and total latency (p50/p95/min/max). Warmup runs execute but don't
+    count, absorbing cold app launches so steady-state numbers are honest."""
+    parser = argparse.ArgumentParser(
+        prog="axstream bench",
+        description="Benchmark a macro: replay repeatedly, report per-op latency.")
+    parser.add_argument("target", help="a macro name or file path")
+    parser.add_argument("--runs", type=int, default=5)
+    parser.add_argument("--warmup", type=int, default=1)
+    parser.add_argument("--slots", default=None,
+                        help="slot values as JSON (same values every run)")
+    args = parser.parse_args(argv)
+
+    slots: dict = {}
+    if args.slots:
+        try:
+            slots = json.loads(args.slots)
+        except ValueError as e:
+            _print_json({"error": f"--slots must be a JSON object: {e}"})
+            return 2
+    path = resolve_name(args.target)
+    if path is None:
+        _print_json({"error": f"no macro named {args.target!r}"})
+        return 2
+    try:
+        mf = load(path)
+        for slot_name, spec in (mf.slots or {}).items():
+            slots.setdefault(slot_name, str(
+                (spec.get("example") if isinstance(spec, dict) else None)
+                or f"<{slot_name}>"))
+        actions = mf.fill(slots)
+        recorded_window = mf.extra.get("window")
+        if isinstance(recorded_window, dict):
+            actions = annotate_window_relative(actions, recorded_window)
+    except MacroFileError as e:
+        _print_json({"error": str(e), "file": str(path)})
+        return 2
+
+    from .driver import DriverComputer  # late: not needed for usage errors
+
+    def pct(vals: list[float], p: float) -> int:
+        s = sorted(vals)
+        return int(s[min(len(s) - 1, int(round(p * (len(s) - 1))))])
+
+    async def go() -> int:
+        computer = DriverComputer()
+        await computer.connect()
+        await computer.fast_cursor()
+        per_op: dict[int, list[float]] = {}
+        totals: list[float] = []
+        failures = 0
+        try:
+            for run in range(args.warmup + args.runs):
+                warm = run < args.warmup
+                events: list[dict] = []
+                t0 = time.perf_counter()
+                code = await run_actions(actions, computer, emit=events.append)
+                total = (time.perf_counter() - t0) * 1000
+                label = "warmup" if warm else "run"
+                _print_json({label: run + 1 if warm else run + 1 - args.warmup,
+                             "ok": code == 0, "total_ms": int(total)})
+                if warm:
+                    continue
+                if code != 0:
+                    failures += 1
+                    continue
+                totals.append(total)
+                for ev in events:
+                    if "i" in ev and "ms" in ev:
+                        per_op.setdefault(ev["i"], []).append(ev["ms"])
+        finally:
+            await computer.close()
+        if not totals:
+            _print_json({"error": "no successful measured runs", "failures": failures})
+            return 1
+        for i, op in enumerate(actions):
+            vals = per_op.get(i)
+            if not vals:
+                continue
+            _print_json({"op": i, "do": op.get("do", op.get("op")),
+                         "p50_ms": pct(vals, 0.5), "p95_ms": pct(vals, 0.95),
+                         "min_ms": int(min(vals)), "max_ms": int(max(vals)),
+                         "n": len(vals)})
+        _print_json({"macro": mf.name, "runs": len(totals), "failures": failures,
+                     "total_p50_ms": pct(totals, 0.5),
+                     "total_p95_ms": pct(totals, 0.95),
+                     "total_min_ms": int(min(totals)),
+                     "total_max_ms": int(max(totals))})
+        return 0
 
     return asyncio.run(go())
 

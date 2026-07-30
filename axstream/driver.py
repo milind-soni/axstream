@@ -31,6 +31,14 @@ DRIVER_SOCK = os.environ.get(
 # windows owned by these never count as "the frontmost app"
 _OVERLAY_APPS = {"Cua Driver", "CursorUIViewService", "Window Server", ""}
 
+# axstream's own agent-cursor instance. Clicks pass it as `session` so the
+# fast motion profile below applies to OUR overlay cursor only — other driver
+# clients (SupaMaus, agents) keep their default human-paced glide. UNIQUE per
+# process: the driver tracks session lifecycle, and a reused id from an
+# earlier run can be in the "ended" state, which REJECTS tool calls until
+# revived (observed live) — a fresh id is auto-created on first use instead.
+_CURSOR_SESSION = f"axstream-{os.getpid()}"
+
 
 class DriverError(RuntimeError):
     pass
@@ -54,6 +62,12 @@ class WindowSnapshot:
     elements: list[dict] = field(default_factory=list)
     bounds: dict = field(default_factory=dict)
     screenshot_size: Optional[tuple[int, int]] = None
+    # path of this snapshot's window screenshot PNG, when one was captured —
+    # the OCR text-anchor rung reads it. Only trustworthy as CURRENT pixels
+    # when the snapshot was freshly captured (window_geometry(fresh_shot=True));
+    # a cache-served snapshot's file may show the window as it looked earlier.
+    shot_path: Optional[str] = None
+    fresh_shot: bool = False
 
 
 def window_pixels_from_screen(gx: float, gy: float, bounds: dict,
@@ -83,12 +97,15 @@ class DriverComputer:
         self.target_pid: Optional[int] = None  # follows `open`
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
-        # last known screenshot size per (pid, window_id), with the bounds it
-        # was captured at — window captures fail transiently right after a
-        # click (observed live on Notes), and while the bounds are unchanged
-        # the previous size (and the driver's registered downscale ratio)
-        # still describe the same pixel space
-        self._shot_cache: dict[tuple[int, int], tuple[tuple, tuple[int, int]]] = {}
+        # last known screenshot size per (pid, window_id), with the window
+        # SIZE it was captured at — the screenshot's pixel dimensions (and the
+        # downscale ratio the driver registers per pid) depend only on the
+        # window's logical size, so cached dims stay valid while the window
+        # merely MOVES; a resize invalidates them. Also serves window captures
+        # that fail transiently right after a click (observed live on Notes).
+        # value: (logical (w, h), screenshot (w, h) px, screenshot file path)
+        self._shot_cache: dict[tuple[int, int],
+                               tuple[tuple, tuple[int, int], str]] = {}
 
     async def connect(self) -> None:
         """Hold ONE connection to the daemon's raw socket — a tool call costs
@@ -278,56 +295,142 @@ class DriverComputer:
         # such elements by recorded coordinates rather than by raising this.
         args: dict[str, Any] = dict(pid=pid, window_id=win["window_id"],
                                     include_screenshot=False, max_elements=500)
+        shot_path = None
         if with_screenshot:
-            args["screenshot_out_file"] = os.path.join(
-                tempfile.gettempdir(), f"axstream-snap-{os.getpid()}.png")
+            shot_path = self._shot_file()
+            args["screenshot_out_file"] = shot_path
         state = await self.tool("get_window_state", **args)
         size = None
         sw, sh = state.get("screenshot_width"), state.get("screenshot_height")
         if isinstance(sw, int) and isinstance(sh, int) and sw > 0 and sh > 0:
             size = (sw, sh)
         if with_screenshot:
-            key = (pid, win["window_id"])
-            bkey = tuple(sorted((win.get("bounds") or {}).items()))
-            if size is not None:
-                self._shot_cache[key] = (bkey, size)
-            else:
-                cached = self._shot_cache.get(key)
-                if cached is not None and cached[0] == bkey:
-                    size = cached[1]  # capture hiccup; bounds unchanged
+            size = self._cache_shot(pid, win, size, shot_path)
         return WindowSnapshot(pid=pid, window_id=win["window_id"],
                               title=win.get("title") or "window",
                               elements=state.get("elements") or [],
                               bounds=win.get("bounds") or {},
-                              screenshot_size=size)
+                              screenshot_size=size,
+                              shot_path=shot_path if size is not None else None,
+                              fresh_shot=with_screenshot and size is not None)
+
+    async def window_geometry(self, fresh_shot: bool = False) -> Optional[WindowSnapshot]:
+        """Cheap geometry for pixel-addressed clicks: live window bounds plus
+        the screenshot pixel dimensions, WITHOUT the element walk. A pixel
+        click needs no element_index, and get_window_state's AX walk is the
+        entire per-click cost (measured on Notes: ~1s at max_elements=500 vs
+        126-206ms at max_elements=1 with the screenshot, ~14ms for the
+        list_windows bounds alone).
+
+        Serving dims from the size-keyed shot cache makes repeat clicks on an
+        unmoved-size window cost one list_windows call. The max_elements=1
+        get_window_state still runs on a cache MISS so the driver's per-pid
+        downscale registration stays consistent with the dims we compute
+        against — that registration only changes when the window size does.
+
+        fresh_shot=True forces a new capture even on a cache hit: the OCR
+        text-anchor rung needs the window's CURRENT pixels, not just its
+        dimensions."""
+        pid = self.target_pid
+        if pid is None:
+            pid, _ = await self.frontmost()
+        if pid is None:
+            return None
+        win = await self._front_window(pid)
+        if win is None:
+            return None
+        self.target_pid = pid
+        bounds = win.get("bounds") or {}
+        key = (pid, win["window_id"])
+        skey = (bounds.get("width"), bounds.get("height"))
+        cached = self._shot_cache.get(key)
+        if not fresh_shot and cached is not None and cached[0] == skey:
+            return WindowSnapshot(pid=pid, window_id=win["window_id"],
+                                  title=win.get("title") or "window",
+                                  bounds=bounds, screenshot_size=cached[1],
+                                  shot_path=cached[2])
+        shot_path = self._shot_file()
+        state = await self.tool("get_window_state", pid=pid,
+                                window_id=win["window_id"],
+                                include_screenshot=False, max_elements=1,
+                                screenshot_out_file=shot_path)
+        size = None
+        sw, sh = state.get("screenshot_width"), state.get("screenshot_height")
+        if isinstance(sw, int) and isinstance(sh, int) and sw > 0 and sh > 0:
+            size = (sw, sh)
+        got_fresh = size is not None
+        size = self._cache_shot(pid, win, size, shot_path)
+        return WindowSnapshot(pid=pid, window_id=win["window_id"],
+                              title=win.get("title") or "window",
+                              bounds=bounds, screenshot_size=size,
+                              shot_path=shot_path if size is not None else None,
+                              fresh_shot=got_fresh)
+
+    def _shot_file(self) -> str:
+        return os.path.join(tempfile.gettempdir(),
+                            f"axstream-snap-{os.getpid()}.png")
+
+    def _cache_shot(self, pid: int, win: dict, size: Optional[tuple[int, int]],
+                    shot_path: Optional[str]) -> Optional[tuple[int, int]]:
+        """Record a capture's dims under the window's logical size — or, when
+        the capture hiccuped (transient post-click failures observed live on
+        Notes), serve the cached dims as long as the size is unchanged."""
+        key = (pid, win["window_id"])
+        bounds = win.get("bounds") or {}
+        skey = (bounds.get("width"), bounds.get("height"))
+        if size is not None:
+            self._shot_cache[key] = (skey, size, shot_path or self._shot_file())
+            return size
+        cached = self._shot_cache.get(key)
+        if cached is not None and cached[0] == skey:
+            return cached[1]
+        return None
 
     # -- element-addressed + window-local actions (the replay click ladder) --
     # Each returns the driver's structured result (click.rs echoes
     # {"path": "ax"|"cgevent"..., "effect": ...}) so callers can surface
     # WHICH delivery path actually ran.
 
+    async def fast_cursor(self) -> None:
+        """Give axstream's cursor instance a near-instant motion profile.
+        The driver's default speed-based glide (~900pt/s peak, plus an 80ms
+        post-click dwell) costs ~1-1.3s of pure animation per click —
+        measured live as the dominant per-click latency once the element
+        walk was gone. Replay calls this once per run; failure is soft (an
+        older driver without the tool just keeps the pretty glide)."""
+        try:
+            await self.tool("set_agent_cursor_motion",
+                            cursor_id=_CURSOR_SESSION, glide_duration_ms=50,
+                            dwell_after_click_ms=0, spring=1.0)
+        except DriverError:
+            pass
+
     async def click_element(self, pid: int, window_id: int, element_index: int) -> dict:
         """AXUIElementPerformAction on a cached element — no cursor move, no
         focus steal, works on background windows. element_index must come
         from the latest window_snapshot of this (pid, window_id)."""
         return await self.tool("click", pid=pid, window_id=window_id,
-                               element_index=element_index)
+                               element_index=element_index,
+                               session=_CURSOR_SESSION)
 
     async def double_click_element(self, pid: int, window_id: int, element_index: int) -> dict:
         """AX double-click: the driver performs AXOpen when advertised, else
         a pixel double-click at the element's center (double_click.rs)."""
         return await self.tool("double_click", pid=pid, window_id=window_id,
-                               element_index=element_index)
+                               element_index=element_index,
+                               session=_CURSOR_SESSION)
 
     async def click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
         """Pid-addressed CGEvent click; x/y are WINDOW-LOCAL screenshot
         pixels (see window_pixels_from_screen). Never desktop scope."""
         return await self.tool("click", pid=pid, window_id=window_id,
-                               x=round(x, 2), y=round(y, 2))
+                               x=round(x, 2), y=round(y, 2),
+                               session=_CURSOR_SESSION)
 
     async def double_click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
         return await self.tool("double_click", pid=pid, window_id=window_id,
-                               x=round(x, 2), y=round(y, 2))
+                               x=round(x, 2), y=round(y, 2),
+                               session=_CURSOR_SESSION)
 
     async def ax_tree(self, frontmost_only: bool = True, max_depth: int = 20) -> dict:
         """Observation, mapped to the computer-server desktop-state shape that

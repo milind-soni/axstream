@@ -64,25 +64,39 @@ def doctor() -> int:
     from .macros import MacroStore
     from .tiny import DEFAULT_URL, TinyMatcher
 
-    checks: list[tuple[str, bool, str]] = []
+    # (name, passed, required, fix) — only REQUIRED checks fail the doctor:
+    # `axstream replay`/`list`/`bench` and the agent surfaces need just the
+    # driver; the tiny matcher serves only the voice/instant tier and its
+    # absence must not read as "axstream is broken" (a coding agent seeing
+    # FAIL here wrongly concluded replay was unhealthy).
+    checks: list[tuple[str, bool, bool, str]] = []
 
     matcher_ok = TinyMatcher().available()
-    checks.append(("tiny matcher", matcher_ok,
-                   f"llama-server not reachable at {DEFAULT_URL} — start one "
-                   "(see docs/quickstart), set AXSTREAM_TINY_URL, or run `axstream up`"))
+    checks.append(("tiny matcher (voice/instant tier only)", matcher_ok, False,
+                   f"llama-server not reachable at {DEFAULT_URL} — needed only "
+                   "for `axstream up` / voice; start one or run `axstream up`"))
 
     driver_ok = os.path.exists(os.path.expanduser(DRIVER_BIN))
-    checks.append(("cua-driver", driver_ok,
+    checks.append(("cua-driver", driver_ok, True,
                    "install cua-driver (github.com/trycua/cua) and grant "
                    "Accessibility permission"))
 
+    try:
+        from . import ocr
+        ocr_ok = ocr.available()
+    except Exception:  # noqa: BLE001 - a broken pyobjc must not kill doctor
+        ocr_ok = False
+    checks.append(("ocr (text anchors + assertions)", ocr_ok, False,
+                   "pip install 'axstream[ocr]' — replay works without it "
+                   "but loses the OCR rung and text assertions"))
+
     store = MacroStore()
     ok = True
-    for name, passed, fix in checks:
-        print(f"  [{'ok ' if passed else 'FAIL'}] {name}"
-              + ("" if passed else f" — {fix}"))
-        ok = ok and passed
-    print(f"  [ok ] macro store — {len(store.macros)} macros at {store.path}")
+    for name, passed, required, fix in checks:
+        tag = "ok " if passed else ("FAIL" if required else "opt")
+        print(f"  [{tag:4}] {name}" + ("" if passed else f" — {fix}"))
+        ok = ok and (passed or not required)
+    print(f"  [ok  ] macro store — {len(store.macros)} macros at {store.path}")
     return 0 if ok else 1
 
 
@@ -280,6 +294,18 @@ def main() -> None:
     if argv and argv[0] == "list":
         from .replay import cmd_list
         sys.exit(cmd_list(argv[1:]))
+    if argv and argv[0] == "mcp":
+        from .mcp import serve
+        sys.exit(serve())
+    if argv and argv[0] == "install":
+        from .install import cmd_install
+        sys.exit(cmd_install(argv[1:]))
+    if argv and argv[0] == "bench":
+        from .replay import cmd_bench
+        sys.exit(cmd_bench(argv[1:]))
+    if argv and argv[0] == "verify":
+        from .gate import cmd_verify
+        sys.exit(cmd_verify(argv[1:]))
 
     parser = argparse.ArgumentParser(prog="axstream")
     parser.add_argument("utterance", nargs="?",

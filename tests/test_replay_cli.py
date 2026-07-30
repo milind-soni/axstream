@@ -177,7 +177,8 @@ def test_click_ladder_prefers_ax_element():
     assert "New Note" in events[0]["resolved"]
     assert events[0]["driver_path"] == "ax"  # the driver echoed the AX path
     clicks = [args for name, args in d.calls if name == "click"]
-    assert clicks == [{"pid": 42, "window_id": 7, "element_index": 12}]
+    assert len(clicks) == 1
+    assert clicks[0].items() >= {"pid": 42, "window_id": 7, "element_index": 12}.items()
     # macro replay must NEVER issue a desktop-scope click
     assert all(args.get("scope") != "desktop" for _, args in d.calls)
 
@@ -226,7 +227,7 @@ def test_double_click_ladder_uses_element_path():
     assert code == 0
     assert events[0]["via"] == "ax_element"
     args = [a for n, a in d.calls if n == "double_click"][-1]
-    assert args == {"pid": 42, "window_id": 7, "element_index": 12}
+    assert args.items() >= {"pid": 42, "window_id": 7, "element_index": 12}.items()
 
 
 def test_double_click_pixel_fallback_window_local():
