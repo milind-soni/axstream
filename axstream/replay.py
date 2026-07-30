@@ -513,6 +513,7 @@ def cmd_replay(argv: list[str]) -> int:
 
     async def go() -> int:
         computer = DriverComputer()
+        if mf.extra.get("delivery") == "foreground": computer.delivery = "foreground"
         await computer.connect()
         await computer.fast_cursor()
         learned: dict[int, dict] = {}
@@ -581,6 +582,7 @@ def cmd_bench(argv: list[str]) -> int:
 
     async def go() -> int:
         computer = DriverComputer()
+        if mf.extra.get("delivery") == "foreground": computer.delivery = "foreground"
         await computer.connect()
         await computer.fast_cursor()
         per_op: dict[int, list[float]] = {}

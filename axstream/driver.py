@@ -95,6 +95,12 @@ class DriverComputer:
         self.binary = binary
         self.socket_path = socket_path
         self.target_pid: Optional[int] = None  # follows `open`
+        # "foreground" = escalated input delivery for apps that drop
+        # background pid-addressed events (Blender-class OpenGL/GHOST UIs):
+        # the driver briefly fronts the target window, posts at the HID/menu
+        # level, and restores the prior app. Set from a macro's header
+        # ("delivery": "foreground"); None = polite background delivery.
+        self.delivery: Optional[str] = None
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         # last known screenshot size per (pid, window_id), with the window
@@ -411,26 +417,40 @@ class DriverComputer:
         from the latest window_snapshot of this (pid, window_id)."""
         return await self.tool("click", pid=pid, window_id=window_id,
                                element_index=element_index,
-                               session=_CURSOR_SESSION)
+                               session=_CURSOR_SESSION,
+                               **self._replay_args())
 
     async def double_click_element(self, pid: int, window_id: int, element_index: int) -> dict:
         """AX double-click: the driver performs AXOpen when advertised, else
         a pixel double-click at the element's center (double_click.rs)."""
         return await self.tool("double_click", pid=pid, window_id=window_id,
                                element_index=element_index,
-                               session=_CURSOR_SESSION)
+                               session=_CURSOR_SESSION,
+                               **self._replay_args())
 
     async def click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
         """Pid-addressed CGEvent click; x/y are WINDOW-LOCAL screenshot
         pixels (see window_pixels_from_screen). Never desktop scope."""
         return await self.tool("click", pid=pid, window_id=window_id,
                                x=round(x, 2), y=round(y, 2),
-                               session=_CURSOR_SESSION)
+                               session=_CURSOR_SESSION,
+                               **self._replay_args())
 
     async def double_click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
         return await self.tool("double_click", pid=pid, window_id=window_id,
                                x=round(x, 2), y=round(y, 2),
-                               session=_CURSOR_SESSION)
+                               session=_CURSOR_SESSION,
+                               **self._replay_args())
+
+    def _replay_args(self) -> dict:
+        """Per-call extras for deterministic replay: opt out of the driver's
+        up-to-1s post-action window-change poll (a replay knows what comes
+        next — patched drivers honor it, older ones ignore the unknown arg),
+        and escalate delivery when the macro declares it."""
+        out: dict = {"observe_window_changes": False}
+        if self.delivery == "foreground":
+            out["delivery_mode"] = "foreground"
+        return out
 
     async def ax_tree(self, frontmost_only: bool = True, max_depth: int = 20) -> dict:
         """Observation, mapped to the computer-server desktop-state shape that
@@ -519,8 +539,22 @@ class DriverComputer:
             if pid is None:
                 raise DriverError("no target app — nothing frontmost and no `open` ran")
             self.target_pid = pid
+        extra = self._replay_args()
+        if (extra.pop("delivery_mode", None) == "foreground"
+                and tool_name in ("press_key", "hotkey", "type_text")):
+            # Foreground delivery = the macro OWNS the foreground for its run:
+            # front the app once, then post keys at the global HID tap
+            # (scope:"desktop", no pid) — the only input Blender-class
+            # OpenGL/GHOST apps accept. pid-addressed posts are ignored by
+            # them even when frontmost (measured live).
+            if not getattr(self, "_fronted", False):
+                await self.tool("bring_to_front", pid=self.target_pid)
+                await asyncio.sleep(0.3)
+                self._fronted = True
+            args["scope"] = "desktop"
+            return await self.tool(tool_name, **args, **extra)
         try:
-            return await self.tool(tool_name, pid=self.target_pid, **args)
+            return await self.tool(tool_name, pid=self.target_pid, **args, **extra)
         except DriverError:
             self.target_pid = None
             raise

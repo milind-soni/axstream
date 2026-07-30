@@ -76,7 +76,7 @@ def test_verify_stamps_on_success(tmp_path, monkeypatch):
     p.write_text("\n".join([json.dumps({"name": "ok", **header})]
                            + [json.dumps(op) for op in BASE]) + "\n")
 
-    async def fake_replay(actions, emit):
+    async def fake_replay(actions, emit, delivery=None):
         emit({"ok": True, "completed": len(actions), "total": len(actions),
               "unverified_steps": [1]})
         return 0
@@ -99,7 +99,7 @@ def test_verify_fails_on_replay_failure(tmp_path, monkeypatch):
                                         "slots": {"query": {"example": "x"}}})]
                            + [json.dumps(op) for op in BASE]) + "\n")
 
-    async def fake_replay(actions, emit):
+    async def fake_replay(actions, emit, delivery=None):
         emit({"failed_at": 4, "op": actions[4], "reason": "assert failed",
               "completed": 4})
         return 1

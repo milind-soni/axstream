@@ -289,6 +289,7 @@ def _tool_replay(args: dict) -> dict:
 
         async def go() -> int:
             computer = DriverComputer()
+            if mf.extra.get("delivery") == "foreground": computer.delivery = "foreground"
             await computer.connect()
             await computer.fast_cursor()
             try:

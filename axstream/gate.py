@@ -126,11 +126,12 @@ def verification(mf: MacroFile) -> dict:
 # -- the live gate ---------------------------------------------------------
 
 
-async def _replay_once(actions: list[dict], emit) -> int:
+async def _replay_once(actions: list[dict], emit, delivery=None) -> int:
     from .driver import DriverComputer
     from .replay import run_actions
 
     computer = DriverComputer()
+    computer.delivery = delivery
     await computer.connect()
     await computer.fast_cursor()
     try:
@@ -192,7 +193,18 @@ def verify(name_or_path: str, slots: Optional[dict] = None,
         lines.append(line)
         emit(line)
 
-    code = asyncio.run(_replay_once(actions, collect))
+    delivery = mf.extra.get("delivery")
+    code = asyncio.run(_replay_once(actions, collect, delivery=delivery))
+    escalated = False
+    if code != 0 and delivery is None:
+        # Delivery auto-discovery: Blender-class OpenGL/custom-event-loop apps
+        # silently ignore background pid-addressed input, so the replay no-ops
+        # and the assert fails. The gate is the one place a re-run is EXPECTED,
+        # so retry once with escalated foreground delivery; if that passes,
+        # the macro learns its delivery mode permanently.
+        lines.clear()
+        code = asyncio.run(_replay_once(actions, collect, delivery="foreground"))
+        escalated = code == 0
     if code != 0:
         last = lines[-1] if lines else {}
         return {"ok": False, "reason": f"live replay failed: "
@@ -200,10 +212,16 @@ def verify(name_or_path: str, slots: Optional[dict] = None,
                 "failed_at": last.get("failed_at")}
     summary = lines[-1] if lines else {}
     blind = len(summary.get("unverified_steps") or [])
+    if escalated:
+        mf.extra["delivery"] = "foreground"
     mf.extra["verified"] = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                             "hash": actions_hash(mf), "blind_steps": blind}
     save(mf, path)
     return {"ok": True, "file": str(path), "blind_steps": blind,
+            **({"delivery": "foreground",
+                "note_delivery": "app ignores background input; foreground "
+                "delivery saved into the macro (replays briefly front its "
+                "window)"} if escalated else {}),
             "note": "verified: one live replay succeeded and the terminal "
                     "assert passed" + (f" ({blind} blind step(s) remain — "
                                        "consider better anchors)" if blind else "")}
