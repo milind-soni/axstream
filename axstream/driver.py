@@ -46,10 +46,12 @@ _OVERLAY_APPS = {"Cua Driver", "CursorUIViewService", "Window Server", ""}
 # axstream's own agent-cursor instance. Clicks pass it as `session` so the
 # fast motion profile below applies to OUR overlay cursor only — other driver
 # clients (SupaMaus, agents) keep their default human-paced glide. UNIQUE per
-# process: the driver tracks session lifecycle, and a reused id from an
-# earlier run can be in the "ended" state, which REJECTS tool calls until
-# revived (observed live) — a fresh id is auto-created on first use instead.
-_CURSOR_SESSION = f"axstream-{os.getpid()}"
+# DriverComputer INSTANCE, not per process: the driver tracks session
+# lifecycle and eventually marks idle sessions "ended", which REJECTS tool
+# calls until revived — fatal for a long-lived MCP server process that
+# reuses one process-wide id across hours (observed live twice). A fresh id
+# per instance is auto-created by the daemon on first use.
+import uuid as _uuid
 
 
 class DriverError(RuntimeError):
@@ -113,6 +115,7 @@ class DriverComputer:
         # level, and restores the prior app. Set from a macro's header
         # ("delivery": "foreground"); None = polite background delivery.
         self.delivery: Optional[str] = None
+        self._cursor_session = f"axstream-{_uuid.uuid4().hex[:8]}"
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         # last known screenshot size per (pid, window_id), with the window
@@ -418,7 +421,7 @@ class DriverComputer:
         older driver without the tool just keeps the pretty glide)."""
         try:
             await self.tool("set_agent_cursor_motion",
-                            cursor_id=_CURSOR_SESSION, glide_duration_ms=50,
+                            cursor_id=self._cursor_session, glide_duration_ms=50,
                             dwell_after_click_ms=0, spring=1.0)
         except DriverError:
             pass
@@ -429,7 +432,7 @@ class DriverComputer:
         from the latest window_snapshot of this (pid, window_id)."""
         return await self.tool("click", pid=pid, window_id=window_id,
                                element_index=element_index,
-                               session=_CURSOR_SESSION,
+                               session=self._cursor_session,
                                **self._replay_args())
 
     async def double_click_element(self, pid: int, window_id: int, element_index: int) -> dict:
@@ -437,7 +440,7 @@ class DriverComputer:
         a pixel double-click at the element's center (double_click.rs)."""
         return await self.tool("double_click", pid=pid, window_id=window_id,
                                element_index=element_index,
-                               session=_CURSOR_SESSION,
+                               session=self._cursor_session,
                                **self._replay_args())
 
     async def click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
@@ -445,13 +448,13 @@ class DriverComputer:
         pixels (see window_pixels_from_screen). Never desktop scope."""
         return await self.tool("click", pid=pid, window_id=window_id,
                                x=round(x, 2), y=round(y, 2),
-                               session=_CURSOR_SESSION,
+                               session=self._cursor_session,
                                **self._replay_args())
 
     async def double_click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
         return await self.tool("double_click", pid=pid, window_id=window_id,
                                x=round(x, 2), y=round(y, 2),
-                               session=_CURSOR_SESSION,
+                               session=self._cursor_session,
                                **self._replay_args())
 
     def _replay_args(self) -> dict:
