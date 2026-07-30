@@ -23,8 +23,20 @@ The compile loop (this is what makes everything fast over time): novel task
 -> do it with ONE `act` batch (assert-guarded) -> if it succeeded, you
 already hold the exact op list -> `write_macro` it -> `verify_macro` when a
 live re-run is safe -> from then on it's a single `replay_macro` call. Fall
-back to native screenshot computer use only for visual judgment the
-primitives can't express (canvas apps, images, layout questions).
+back to native computer use for what the primitives can't express — and
+route smartly (benchmarked, 2026-07-30):
+
+- VISUAL-STATE questions (which item is selected/highlighted, colors,
+  rendered appearance) -> go native DIRECTLY. OCR text cannot see selection
+  rings; paying screen_text first and falling back doubles the cost.
+- Pure READING in AX-rich apps (Safari, system apps): if your native
+  computer use already returns accessibility TEXT (not screenshots), it may
+  be as fast as screen_text — use whichever you have; screen_text's edge is
+  apps with poor/truncated AX (Electron, canvas, custom toolbars) and hosts
+  whose computer use is screenshot-based.
+- axstream wins BIGGEST on: repeat tasks (replay a verified macro — measured
+  2.7x faster than warm native CU on the same task), batched mutations with
+  outcome asserts, and anything you'll ever do twice.
 
 The verify gate (never trust an unchecked macro): a macro can replay to
 100% and still not do the task — so every macro should END with an assert
