@@ -143,17 +143,33 @@ class DriverComputer:
             self._writer.close()
             self._reader = self._writer = None
 
+    # tool calls that are safe to re-send after a socket hiccup. Input
+    # actions are NOT here on purpose: if the first send executed but the
+    # response read failed, a blind retry DOUBLE-EXECUTES it — observed live
+    # as a URL typed twice into Safari (type_text retried after a timeout).
+    # An idempotent read fails soft; a doubled click/keystroke corrupts state.
+    _IDEMPOTENT = {"list_windows", "list_apps", "get_window_state",
+                   "get_screen_size", "get_desktop_state", "check_permissions",
+                   "health_report", "get_config", "get_accessibility_tree",
+                   "set_agent_cursor_motion", "bring_to_front"}
+
     async def tool(self, _tool_name: str, /, **args: Any) -> dict:
         if self._writer is not None:
             try:
                 return await self._tool_socket(_tool_name, args)
-            except (OSError, asyncio.IncompleteReadError, ValueError):
+            except (OSError, asyncio.IncompleteReadError, ValueError) as e:
                 # ValueError covers a desynced stream (oversized frame left a
                 # fragment behind) — drop the connection, never parse garbage
                 await self.close()
-                await self.connect()  # one reconnect, then give it one more go
-                if self._writer is not None:
+                await self.connect()  # reconnect for subsequent calls
+                if _tool_name in self._IDEMPOTENT and self._writer is not None:
                     return await self._tool_socket(_tool_name, args)
+                if _tool_name not in self._IDEMPOTENT:
+                    raise DriverError(
+                        f"{_tool_name}: driver connection failed mid-call ({e}) "
+                        "— NOT retried (the action may already have executed; "
+                        "a blind retry could double-act). Check the app state "
+                        "before re-issuing.") from e
         return await self._tool_subprocess(_tool_name, args)
 
     async def _tool_socket(self, name: str, args: dict) -> dict:
