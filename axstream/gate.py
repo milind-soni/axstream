@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re as _re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -65,7 +66,18 @@ def _shape(op: dict) -> Optional[tuple]:
                 label = (target.get("text") or ax.get("title") or "").strip().lower()
             return (do, label or "px")
         if do == "type":
-            return ("type",)
+            # Slot placeholders are parameterization (blank them); LITERAL
+            # typed text is task identity — "type a search query" and "type
+            # this exact URL" are different tasks even with identical
+            # surrounding keystrokes (observed: a nav macro upserted away a
+            # search macro). Hash literals so instances stay distinct without
+            # storing content in the signature.
+            text = str(op.get("text") or "")
+            slots = tuple(sorted(set(_re.findall(r"\{(\w+)\}", text))))
+            if slots:
+                return ("type", "slots", slots)
+            digest = hashlib.sha1(text.encode()).hexdigest()[:8]
+            return ("type", "lit", digest)
         if do == "key":
             keys = op.get("keys") or []
             return ("key", "+".join(str(k).lower() for k in keys))

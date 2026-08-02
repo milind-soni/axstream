@@ -23,10 +23,9 @@ def mf_of(actions, name="m", header=None):
 
 # -- signature --------------------------------------------------------------
 
-def test_signature_ignores_values_and_waits():
+def test_signature_ignores_waits_and_names():
     a = mf_of(BASE)
     b_actions = [dict(op) for op in BASE]
-    b_actions[2] = {"op": "act", "do": "type", "text": "totally different"}
     b_actions.insert(2, {"op": "act", "do": "wait", "ms": 900})
     b = mf_of(b_actions, name="other-name")
     assert gate.signature(a) == gate.signature(b)
@@ -125,3 +124,13 @@ def test_upsert_conflicts_and_archive(tmp_path, monkeypatch):
     dest = gate.archive(old)
     assert not old.exists() and dest.exists()
     assert dest.parent.name == gate.ARCHIVE_DIR_NAME
+
+
+def test_signature_distinguishes_literal_typed_text():
+    # same key/type shape, but typing a literal URL is a DIFFERENT task from
+    # typing a slotted query — the upsert must not collapse them
+    nav = [dict(op) for op in BASE]
+    nav[2] = {"op": "act", "do": "type", "text": "https://example.com/docs"}
+    assert gate.signature(mf_of(BASE)) != gate.signature(mf_of(nav))
+    # but two instances of the same slotted task still collide (upsert works)
+    assert gate.signature(mf_of(BASE)) == gate.signature(mf_of(BASE, name="twin"))
