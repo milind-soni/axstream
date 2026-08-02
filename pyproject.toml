@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "axstream"
-version = "0.1.1"
+version = "0.1.2"
 description = "Fast, verified computer use for agents: a streaming JSONL action spec, a verified click ladder, and macros that make repeat tasks instant"
 readme = "README.md"
 license = { file = "LICENSE" }
