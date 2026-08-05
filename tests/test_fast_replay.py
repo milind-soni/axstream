@@ -31,6 +31,37 @@ def gws_calls(d):
     return [a for n, a in d.calls if n == "get_window_state"]
 
 
+def test_spec_accepts_right_click_target():
+    ok, error = validate_op({"op": "act", "do": "right_click",
+                             "target": {"ax": {"title": "Item"}}})
+    assert ok, error
+
+
+def test_spec_accepts_resize_aware_drag():
+    op = {"op": "act", "do": "drag",
+          "from": {"win": {"fx": 0.25, "fy": 0.5, "w": 800, "h": 600}},
+          "to": {"win": {"fx": 0.75, "fy": 0.5, "w": 800, "h": 600}}}
+    ok, error = validate_op(op)
+    assert ok, error
+
+
+def test_drag_scales_source_window_points_to_retina_pixels():
+    op = {"op": "act", "do": "drag",
+          "from": {"win": {"fx": 0.25, "fy": 0.5, "w": 800, "h": 600}},
+          "to": {"win": {"fx": 0.75, "fy": 0.5, "w": 800, "h": 600}}}
+    d = FakeDriver()
+    code, events = run([op], d)
+    assert code == 0
+    assert events[0]["via"] == "window_drag"
+    assert events[0]["geometry"] == "exact"
+    args = [a for name, a in d.calls if name == "drag"][-1]
+    assert args.items() >= {
+        "pid": 42, "window_id": 7,
+        "from_x": 400, "from_y": 600,
+        "to_x": 1200, "to_y": 600}.items()
+    assert events[-1]["unverified_steps"] == [0]
+
+
 # -- Phase 1: pixel clicks never pay the element walk ----------------------
 
 def test_pixel_click_skips_element_walk():
@@ -340,3 +371,56 @@ def test_assert_text_fails_honestly(monkeypatch):
     code, events = run([op], ShotWritingDriver())
     assert code == 1
     assert "not visible" in events[-1]["reason"]
+
+
+def test_wait_until_returns_immediately_when_ready(monkeypatch):
+    monkeypatch.setattr(ocr, "available", lambda: True)
+    monkeypatch.setattr(ocr, "find_text", lambda p, q: TextHit(
+        x=1, y=2, text=q, confidence=0.9, level="fast"))
+    op = {"op": "act", "do": "wait_until",
+          "target": {"text": "ready"}, "timeout_ms": 5000}
+    driver = ShotWritingDriver()
+    code, events = run([op], driver)
+    assert code == 0
+    assert events[0]["via"] == "ocr"
+    assert events[0]["ms"] < 500
+    assert len(gws_calls(driver)) == 1
+
+
+def test_wait_until_polls_until_text_appears(monkeypatch):
+    monkeypatch.setattr(ocr, "available", lambda: True)
+    attempts = {"count": 0}
+
+    def eventually(_path, query):
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            return None
+        return TextHit(x=1, y=2, text=query, confidence=0.9, level="fast")
+
+    monkeypatch.setattr(ocr, "find_text", eventually)
+    op = {"op": "act", "do": "wait_until", "target": {"text": "ready"},
+          "timeout_ms": 200, "poll_ms": 20}
+    code, events = run([op], ShotWritingDriver())
+    assert code == 0
+    assert attempts["count"] == 3
+    assert events[0]["window"] == "Notes"
+
+
+def test_wait_until_timeout_is_precise_failure(monkeypatch):
+    monkeypatch.setattr(ocr, "available", lambda: True)
+    monkeypatch.setattr(ocr, "find_text", lambda p, q: None)
+    op = {"op": "act", "do": "wait_until", "target": {"text": "never"},
+          "timeout_ms": 0}
+    code, events = run([op], ShotWritingDriver())
+    assert code == 1
+    assert "wait_until failed" in events[-1]["reason"]
+    assert "within 0ms" in events[-1]["reason"]
+
+
+def test_spec_accepts_and_validates_wait_until():
+    ok, _ = validate_op({"op": "act", "do": "wait_until",
+                         "target": {"text": "ready"}, "timeout_ms": 1000})
+    assert ok
+    ok, error = validate_op({"op": "act", "do": "wait_until",
+                             "target": {"text": "ready"}, "poll_ms": -1})
+    assert not ok and "poll_ms" in error

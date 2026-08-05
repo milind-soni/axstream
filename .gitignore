@@ -13,3 +13,5 @@ docs/.next/
 docs/.source/
 docs/out/
 docs/.vercel/
+swift/AxstreamBar/.build/
+.env

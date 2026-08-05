@@ -227,6 +227,11 @@ class Session:
                 print(f"  replay {result.status} ({result.reason}) — "
                       "falling back to the LLM tier")
             return await self._fast_tier(utterance, t0, match_ms)
+        if result.status == "done":
+            # A template that just executed successfully belongs in the file
+            # library too, so the menu-bar matcher stops saying "no macro"
+            # for a workflow the engine demonstrably knows.
+            self._mirror_template_to_files(hit["template"])
         return {
             "tier": "instant",
             "template": hit["template"],
@@ -236,6 +241,32 @@ class Session:
             "match_ms": round(match_ms),
             "total_ms": round((time.perf_counter() - t0) * 1000),
         }
+
+    def _mirror_template_to_files(self, template_id: str) -> None:
+        """Copy a proven store template into ~/.axstream/macros — organic,
+        one successful run at a time. Never overwrites: skips when a file of
+        the same name exists OR when the signature-dedup finds a same-task
+        file macro (mirroring must never archive a hand-authored macro)."""
+        try:
+            from pathlib import Path
+            dest = Path("~/.axstream/macros").expanduser() \
+                / f"{template_id}.axstream"
+            if dest.exists():
+                return
+            macro = self.store.macros.get(template_id)
+            if macro is None:
+                return
+            from .gate import upsert_conflicts
+            from .macrofile import dumps, from_macro, parse
+            content = dumps(from_macro(
+                macro, provenance={"source": "store-mirror"}))
+            mf = parse(content, name_hint=template_id)
+            if upsert_conflicts(mf, exclude_stem=template_id):
+                return
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(content)
+        except Exception:  # noqa: BLE001 - mirroring is best-effort
+            pass
 
     async def _fast_tier(self, utterance: str, t0: float, match_ms: float) -> dict:
         """No macro matched: let the LLM plan and execute over the live screen,
@@ -301,6 +332,17 @@ class Session:
                           "actions", "guard")})
         macro.app = self._frontmost  # scope to the app the run landed in
         self.learn(macro)
+        # Mirror into the file library so the menu bar / voice matcher see
+        # the new workflow immediately — write_macro brings validation,
+        # same-task dedup (archives, never deletes), and authoring lints.
+        try:
+            from .macrofile import dumps, from_macro
+            from .mcp import _tool_write
+            _tool_write({"name": macro.id, "content": dumps(from_macro(
+                macro, provenance={"source": "llm-run-learned",
+                                   "utterance": utterance}))})
+        except Exception:  # noqa: BLE001 - the mirror is best-effort
+            pass
         if self.verbose:
             print(f"learned {macro.id}", flush=True)
 

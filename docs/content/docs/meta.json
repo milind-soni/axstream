@@ -3,8 +3,9 @@
   "pages": [
     "index",
     "how-it-works",
-    "spec",
     "quickstart",
+    "voice",
+    "spec",
     "agents",
     "integrate",
     "roadmap"

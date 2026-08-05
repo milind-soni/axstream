@@ -6,6 +6,9 @@ Lines stream inside a ```spec fence; prose outside the fence is narration.
 
 Ops:
   {"op":"act","do":"click","target":{"ax":{"id":"e12"}}}
+  {"op":"act","do":"right_click","target":{"ax":{"title":"Item"}}}
+  {"op":"act","do":"drag","from":{"win":{"fx":0.1,"fy":0.2,"w":800,"h":600}},
+   "to":{"win":{"fx":0.7,"fy":0.8,"w":800,"h":600}}}
   {"op":"act","do":"click","target":{"x":420,"y":312},"risk":"risky"}
   {"op":"act","do":"type","text":"hello"}
   {"op":"act","do":"key","keys":["cmd","s"]}
@@ -13,6 +16,8 @@ Ops:
   {"op":"act","do":"move","target":{...}}
   {"op":"act","do":"open","target":"Safari"}          # app name or URL
   {"op":"act","do":"wait","ms":300}
+  {"op":"act","do":"wait_until","target":{"text":"Loaded"},
+   "timeout_ms":3000}
   {"op":"assert","target":{"ax":{"role":"AXButton","title":"Save"}}}
   {"op":"observe"}                                    # end burst, request fresh look
   {"op":"done","status":"success","reason":"..."}
@@ -38,12 +43,15 @@ from typing import Any
 ACTIONS: dict[str, tuple[set[str], set[str], str]] = {
     "click": ({"target"}, {"risk"}, "safe"),
     "double_click": ({"target"}, {"risk"}, "safe"),
+    "right_click": ({"target"}, {"risk"}, "safe"),
+    "drag": ({"from", "to"}, {"risk"}, "safe"),
     "type": ({"text"}, {"risk"}, "safe"),
     "key": ({"keys"}, {"risk"}, "safe"),
     "scroll": ({"direction"}, {"clicks", "risk"}, "safe"),
     "move": ({"target"}, {"risk"}, "safe"),
     "open": ({"target"}, {"risk"}, "safe"),
     "wait": ({"ms"}, set(), "safe"),
+    "wait_until": ({"target"}, {"timeout_ms", "poll_ms"}, "safe"),
 }
 
 OPS = {"act", "assert", "observe", "done"}
@@ -70,6 +78,15 @@ def validate_op(obj: Any) -> tuple[bool, str]:
             return False, f"{do}: missing {sorted(missing)}"
         if "target" in required and not _valid_target(obj["target"], do):
             return False, f"{do}: bad target {obj['target']!r}"
+        if do == "drag":
+            for field in ("from", "to"):
+                if not _valid_target(obj.get(field), do):
+                    return False, f"drag: bad {field} {obj.get(field)!r}"
+        if do == "wait_until":
+            for field in ("timeout_ms", "poll_ms"):
+                if field in obj and (not isinstance(obj[field], int)
+                                     or obj[field] < 0):
+                    return False, f"wait_until: {field} must be a non-negative integer"
     if op == "assert" and not _valid_target(obj.get("target"), "assert"):
         return False, f"assert: bad target {obj.get('target')!r}"
     if op == "done" and obj.get("status") not in ("success", "failure"):

@@ -4,6 +4,7 @@
           [--slots '{"k":"v"}']     fill slot placeholders
           [--dry]                   print the resolved actions, execute nothing
   axstream list                   macro files found, with descriptions
+  axstream menu                   menu-bar voice launcher (hold ⌃⌥, speak)
   axstream up                     start everything with defaults and listen
   axstream up --voice             same, but listen on the microphone
   axstream "launch safari"        one utterance, JSON result on stdout
@@ -195,6 +196,35 @@ def _ensure_driver() -> bool:
     return False
 
 
+def _launch_menu_bar() -> int:
+    """Start the native menu-bar app (swift/AxstreamBar): hold ⌃⌥ and speak
+    a workflow — whisper.cpp + the tiny matcher + macro replay."""
+    from pathlib import Path
+    if subprocess.run(["pgrep", "-x", "AxstreamBar"],
+                      capture_output=True).returncode == 0:
+        print("Axstream is already in the menu bar (hold ⌃⌥ and speak)")
+        return 0
+    repo = Path(__file__).resolve().parent.parent
+    candidates = [
+        Path("~/.axstream/bin/AxstreamBar").expanduser(),
+        repo / "swift/AxstreamBar/.build/release/AxstreamBar",
+    ]
+    binary = next((p for p in candidates if p.is_file() and os.access(p, os.X_OK)), None)
+    if binary is None:
+        print("AxstreamBar is not built. Build it with:\n"
+              f"  cd {repo / 'swift/AxstreamBar'} && swift build -c release",
+              file=sys.stderr)
+        return 1
+    log = Path("~/.axstream/bar.log").expanduser()
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a") as handle:
+        handle.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] launching AxstreamBar\n")
+        subprocess.Popen([str(binary)], stdout=handle, stderr=subprocess.STDOUT,
+                         stdin=subprocess.DEVNULL, start_new_session=True)
+    print("Axstream is in the menu bar — hold ⌃⌥ and speak a workflow")
+    return 0
+
+
 def _print_result(res: dict) -> None:
     tier = res.get("tier")
     if tier == "instant":
@@ -285,7 +315,26 @@ async def _voice_loop(session) -> None:
             print(f"\n  {YELLOW}cancelled{RESET} — still listening\n")
 
 
+def _load_env_file() -> None:
+    """Merge ~/.axstream/env (KEY=VALUE lines) into the environment so API
+    keys reach every entry point — CLI, MCP server, and the menu-bar app's
+    spawned engine calls — without depending on shell profiles."""
+    from pathlib import Path
+    path = Path("~/.axstream/env").expanduser()
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
 def main() -> None:
+    _load_env_file()
     # file-macro subcommands take their own flags — dispatch before argparse
     argv = sys.argv[1:]
     if argv and argv[0] == "replay":
@@ -306,11 +355,13 @@ def main() -> None:
     if argv and argv[0] == "verify":
         from .gate import cmd_verify
         sys.exit(cmd_verify(argv[1:]))
+    if argv and argv[0] == "menu":
+        sys.exit(_launch_menu_bar())
 
     parser = argparse.ArgumentParser(prog="axstream")
     parser.add_argument("utterance", nargs="?",
                         help="one utterance to handle (or a subcommand: "
-                             "up / seed / replay / list)")
+                             "up / seed / replay / list / menu)")
     parser.add_argument("--voice", action="store_true",
                         help="with `up`: listen on the microphone")
     parser.add_argument("--stdin", action="store_true",

@@ -69,7 +69,7 @@ def build_prompt(templates: list[dict]) -> str:
     for t in templates:
         slot_desc = ", ".join(t.get("slots", [])) or "no slots"
         lines.append(f"- {t['id']} — {t['description']} (slots: {slot_desc})")
-        for example in t.get("examples", [])[:3]:
+        for example in t.get("examples", [])[:5]:
             expected = json.dumps({"template": t["id"], "slots": example.get("slots", {})})
             lines.append(f'  Example: "{example["utterance"]}" -> {expected}')
     lines += [

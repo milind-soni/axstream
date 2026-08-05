@@ -43,6 +43,62 @@ DRIVER_SOCK = _default_socket()
 # windows owned by these never count as "the frontmost app"
 _OVERLAY_APPS = {"Cua Driver", "CursorUIViewService", "Window Server", ""}
 
+
+def match_app_name(spoken: str, installed: list[str]) -> Optional[str]:
+    """Resolve a spoken app name against installed app names.
+
+    Ladder: case-insensitive exact -> token-subset in either direction
+    ("apple maps" ⊇ "Maps", "chrome" ⊆ "Google Chrome") -> difflib closest.
+    Returns None when nothing clears the bar — the caller keeps its honest
+    launch failure rather than opening a wrong app.
+    """
+    import difflib
+
+    def tokens(name: str) -> set[str]:
+        return set(re.findall(r"[a-z0-9]+", name.lower()))
+
+    spoken_t = tokens(spoken)
+    if not spoken_t:
+        return None
+    for name in installed:
+        if name.lower() == spoken.lower():
+            return name
+    subset = [n for n in installed
+              if tokens(n) and (tokens(n) <= spoken_t or spoken_t <= tokens(n))]
+    if subset:
+        # strongest overlap wins; shorter name breaks ties ("Maps" over
+        # "Google Maps SDK Helper")
+        def score(name: str) -> tuple:
+            common = len(tokens(name) & spoken_t)
+            return (-common, len(name))
+        return sorted(subset, key=score)[0]
+    close = difflib.get_close_matches(
+        spoken.lower(), [n.lower() for n in installed], n=1, cutoff=0.75)
+    if close:
+        for name in installed:
+            if name.lower() == close[0]:
+                return name
+    return None
+
+
+def _usable_window(window: dict) -> bool:
+    """A real document/dialog window, including one whose title is not ready.
+
+    Notes and other document apps create substantial untitled windows before
+    AX/WindowServer propagates their title. Rejecting every blank title made a
+    new front window invisible to replay, which then asserted against an older
+    titled document. The transient AppKit strips this rule originally guarded
+    against are only ~33pt high; geometry separates them without sacrificing
+    legitimate untitled windows.
+    """
+    bounds = window.get("bounds") or {}
+    width = bounds.get("width") or 0
+    height = bounds.get("height") or 0
+    # Titles do not make tiny AppKit surfaces into document windows. A live
+    # TextEdit context-menu remnant appeared as title="Window", 66x20 and
+    # outranked the real 586x488 document by z-index.
+    return width >= 120 and height >= 80
+
 # axstream's own agent-cursor instance. Clicks pass it as `session` so the
 # fast motion profile below applies to OUR overlay cursor only — other driver
 # clients (SupaMaus, agents) keep their default human-paced glide. UNIQUE per
@@ -227,7 +283,12 @@ class DriverComputer:
     # -- Executor-facing surface ------------------------------------------
 
     async def open(self, target: str) -> None:
-        is_url = "://" in target or target.startswith("www.")
+        # domain-shaped targets count as URLs so spoken "open github.com"
+        # lands in the browser even when a matcher routes it as an app name
+        is_url = "://" in target or target.startswith("www.") or bool(
+            re.match(r"^[a-z0-9-]+(\.[a-z0-9-]+)*"
+                     r"\.(com|org|net|io|dev|ai|app|co|in|me|so|xyz)(/.*)?$",
+                     target.strip().lower()))
         if not is_url:
             # hot path (~5ms): app already has a window on screen
             try:
@@ -252,6 +313,10 @@ class DriverComputer:
                 if running:
                     self.target_pid = running[0]["pid"]
                     await self.tool("bring_to_front", pid=self.target_pid)
+                    # restore Dock-minimized windows first: activation leaves
+                    # them minimized, and _await_window's lenient predicate
+                    # would accept them while the user sees nothing appear
+                    await self._unminimize(self.target_pid)
                     # condition wait: the window may live on another Space and
                     # takes a beat to arrive on screen after bring_to_front
                     if await self._await_window(self.target_pid, tries=10) is not None:
@@ -267,7 +332,18 @@ class DriverComputer:
             url = target if "://" in target else f"https://{target}"
             res = await self.tool("launch_app", name="Safari", urls=[url])
         else:
-            res = await self.tool("launch_app", name=target)
+            try:
+                res = await self.tool("launch_app", name=target)
+            except DriverError:
+                # spoken names rarely match bundle names exactly ("apple
+                # maps" → "Maps", "chrome" → "Google Chrome") — resolve
+                # against the installed list and retry once
+                apps = await self.tool("list_apps")
+                names = [a.get("name") or "" for a in apps.get("apps", [])]
+                resolved = match_app_name(target, names)
+                if not resolved or resolved.lower() == target.lower():
+                    raise
+                res = await self.tool("launch_app", name=resolved)
         pid = self._extract_pid(res)
         if pid is None:
             # no pid = the launch didn't land (unknown app name, driver error).
@@ -278,8 +354,30 @@ class DriverComputer:
         await self.tool("bring_to_front", pid=pid)
         # condition wait, not a fixed sleep: an on-screen window means the app
         # is ready for keys; cold launches (Firefox) can take seconds
-        await self._await_window(pid)
+        if await self._await_window(pid, tries=8) is None:
+            # activation leaves Dock-minimized windows minimized — the app is
+            # "frontmost" with nothing on screen. Restore via AX, then keep
+            # waiting (cold launches like Firefox legitimately take seconds).
+            await self._unminimize(pid)
+            await self._await_window(pid, tries=17)
         await asyncio.sleep(0.2)  # brief settle after the window appears
+
+    async def _unminimize(self, pid: int) -> bool:
+        """Un-minimize every window of `pid` via AX (System Events). The
+        driver has no restore tool; osascript needs Accessibility, which the
+        CLI/menu-bar process chain already holds."""
+        script = ('tell application "System Events" to tell '
+                  f'(first process whose unix id is {pid}) to set value of '
+                  'attribute "AXMinimized" of (every window whose value of '
+                  'attribute "AXMinimized" is true) to false')
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "osascript", "-e", script,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL)
+            return (await proc.wait()) == 0
+        except OSError:
+            return False
 
     async def _await_window(self, pid: int, tries: int = 25) -> Optional[dict]:
         """Condition-wait for an on-screen titled window of `pid` (Space
@@ -292,10 +390,10 @@ class DriverComputer:
         return None
 
     async def _front_window(self, pid: int) -> Optional[dict]:
-        # non-EMPTY title required: transient tooltip/hover windows (Notes
-        # spawns 1512x33 title-'' strips ABOVE the main window in z) must
-        # never be picked as "the" window — observed live breaking replay's
-        # per-click snapshots.
+        # A non-empty title is preferred evidence, but not required: newly
+        # created/detached document windows can be substantial and untitled
+        # for a short period. _usable_window rejects the transient 1512x33
+        # Notes strips that originally motivated the old title-only filter.
         # on-screen preferred, NOT required: when the user holds focus on
         # another Space (observed live — activation refused while they work),
         # the app's window stays off screen, but AX walks, element actions,
@@ -303,9 +401,14 @@ class DriverComputer:
         # the background instead of failing with "no window"
         wins = await self.tool("list_windows")
         mine = [w for w in wins.get("windows", [])
-                if w.get("pid") == pid and w.get("title")]
+                if w.get("pid") == pid and _usable_window(w)]
         on_screen = [w for w in mine if w.get("is_on_screen")]
-        pick = on_screen or mine
+        # A substantial blank-title window is trustworthy while on-screen
+        # (the new-document race). Off-screen, prefer titled windows so the
+        # common AppKit 500x500 placeholder/proxy surfaces do not outrank the
+        # real background document merely because their z index is newer.
+        titled = [w for w in mine if w.get("title")]
+        pick = on_screen or titled or mine
         return max(pick, key=lambda w: w.get("z_index", 0)) if pick else None
 
     async def window_snapshot(self, with_screenshot: bool = False) -> Optional[WindowSnapshot]:
@@ -459,6 +562,14 @@ class DriverComputer:
                                session=self._cursor_session,
                                **self._replay_args())
 
+    async def right_click_element(self, pid: int, window_id: int,
+                                  element_index: int) -> dict:
+        """AXShowMenu on a freshly snapshotted element."""
+        return await self.tool("right_click", pid=pid, window_id=window_id,
+                               element_index=element_index,
+                               session=self._cursor_session,
+                               **self._replay_args())
+
     async def click_window_pixel(self, pid: int, window_id: int, x: float, y: float) -> dict:
         """Pid-addressed CGEvent click; x/y are WINDOW-LOCAL screenshot
         pixels (see window_pixels_from_screen). Never desktop scope."""
@@ -472,6 +583,53 @@ class DriverComputer:
                                x=round(x, 2), y=round(y, 2),
                                session=self._cursor_session,
                                **self._replay_args())
+
+    async def right_click_window_pixel(self, pid: int, window_id: int,
+                                       x: float, y: float) -> dict:
+        return await self.tool("right_click", pid=pid, window_id=window_id,
+                               x=round(x, 2), y=round(y, 2),
+                               session=self._cursor_session,
+                               **self._replay_args())
+
+    async def drag(self, from_target: dict, to_target: dict) -> dict:
+        """Replay a drag recorded in a source app-window screenshot.
+
+        ``win`` fragments carry source-image fractions and dimensions. They
+        are remapped through the live logical window and then scaled into the
+        driver's current screenshot-pixel space (including Retina 2x).
+        """
+        from .geometry import GeometryMismatch, remap_offset
+
+        geom = await self.window_geometry()
+        if geom is None or geom.screenshot_size is None:
+            raise DriverError("drag: could not size the target window")
+        lw = geom.bounds.get("width") or 0
+        lh = geom.bounds.get("height") or 0
+        if not lw or not lh:
+            raise DriverError("drag: target window has invalid geometry")
+
+        def resolve(point: dict) -> tuple[float, float, str]:
+            win = point.get("win") if isinstance(point, dict) else None
+            if not isinstance(win, dict):
+                raise DriverError("drag: point is missing its win fragment")
+            try:
+                dx, dy, mode = remap_offset(win, lw, lh)
+            except GeometryMismatch as exc:
+                raise DriverError(f"drag: {exc}") from exc
+            sw, sh = geom.screenshot_size
+            return dx * sw / lw, dy * sh / lh, mode
+
+        fx, fy, from_mode = resolve(from_target)
+        tx, ty, to_mode = resolve(to_target)
+        result = await self.tool(
+            "drag", pid=geom.pid, window_id=geom.window_id,
+            from_x=round(fx, 2), from_y=round(fy, 2),
+            to_x=round(tx, 2), to_y=round(ty, 2),
+            duration_ms=150, steps=8,
+            session=self._cursor_session, **self._replay_args())
+        return {**result, "via": "window_drag",
+                "geometry": (from_mode if from_mode == to_mode
+                             else f"{from_mode}->{to_mode}")}
 
     def _replay_args(self) -> dict:
         """Per-call extras for deterministic replay: opt out of the driver's
@@ -554,6 +712,9 @@ class DriverComputer:
         # x/y are SCREEN coords on the driver's pixel path (unlike click, a
         # pid is required here, but it does not make the coords window-local)
         await self._pid_tool("double_click", x=int(x), y=int(y))
+
+    async def right_click(self, x: float, y: float) -> None:
+        await self._pid_tool("right_click", x=int(x), y=int(y))
 
     async def move(self, x: float, y: float) -> None:
         # moves the driver's overlay cursor, not the real pointer — visual only

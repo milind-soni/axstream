@@ -3,10 +3,13 @@ title: Integrate your STT
 description: You own audio → text. axstream owns text → action.
 ---
 
-If you build a dictation or voice product (Wispr Flow, Willow Voice, or your
-own STT stack), the seam is one string: send axstream the **final transcribed
-utterance**, get back an executed action — or a fast, explicit "not mine" you
-can route to your own fallback.
+axstream ships its own ears — the [menu bar app](/docs/voice) does
+hold-to-talk with local whisper end to end. This page is for the other
+arrangement: you build a dictation or voice product (Wispr Flow, Willow
+Voice, or your own STT stack) and want axstream as the action layer. The
+seam is one string: send axstream the **final transcribed utterance**, get
+back an executed action — or a fast, explicit "not mine" you can route to
+your own fallback.
 
 ```
 your app:   audio ──▶ STT ──▶ "launch safari"

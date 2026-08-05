@@ -43,6 +43,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 
 from .macrofile import (
@@ -135,6 +136,55 @@ TOOLS = [
             "properties": {"ops": {"type": "array", "items": {"type": "object"},
                                    "description": "spec ops, executed in order"}},
             "required": ["ops"], "additionalProperties": False,
+        },
+    },
+    {
+        "name": "begin_capture",
+        "description": (
+            "Start capturing a novel Codex native computer-use workflow. "
+            "Returns a capture id, trace path, and a short Node snippet that "
+            "wraps the already-initialized `sky` object. Continue using "
+            "native computer use normally; successful actions, AX state used "
+            "to choose element_index targets, and source screenshot dimensions "
+            "for coordinate clicks/drags are appended to the trace. Call "
+            "get_app_state immediately before those actions. The result also "
+            "includes node_teardown; run it when the "
+            "first run ends so later native actions are not recorded. After "
+            "the task succeeds, call compile_capture. This is "
+            "the explicit bridge between Codex computer use and Axstream — "
+            "cua-driver's recorder cannot observe `sky` calls by itself."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string",
+                         "description": "short task/macro name"},
+                "description": {"type": "string"},
+                "when_to_use": {"type": "string"},
+            },
+            "required": ["name"], "additionalProperties": False,
+        },
+    },
+    {
+        "name": "compile_capture",
+        "description": (
+            "Compile a successful Codex native computer-use capture into a "
+            "normal parameterized .axstream macro. Refuses unsupported or "
+            "lossy native actions instead of silently saving a partial "
+            "workflow. `slots` maps slot names to captured `value`, optional "
+            "description, and optional example. `terminal_assert` is a normal "
+            "Axstream target such as {\"text\":\"Brief: {topic}\"}; include "
+            "one so the resulting macro can pass verify_macro."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "capture_id": {"type": "string"},
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "when_to_use": {"type": "string"},
+                "slots": {"type": "object"},
+                "terminal_assert": {"type": "object"},
+            },
+            "required": ["capture_id"], "additionalProperties": False,
         },
     },
     {
@@ -297,7 +347,13 @@ def _tool_replay(args: dict) -> dict:
             finally:
                 await computer.close()
 
+        started = time.perf_counter()
         code = asyncio.run(go())
+        from .launcher import record_outcome
+
+        record_outcome(mf.name, code,
+                       round((time.perf_counter() - started) * 1000),
+                       slots.keys(), lines[-1] if lines else {})
     return _text_result("\n".join(json.dumps(l, ensure_ascii=False) for l in lines),
                         is_error=code != 0)
 
@@ -331,6 +387,32 @@ def _tool_write(args: dict) -> dict:
     dest.write_text(content if content.endswith("\n") else content + "\n")
     verb = "updated" if existed else "saved"
     msg = f"{verb} {mf.name!r} ({len(mf.actions)} actions) -> {dest}"
+    if not mf.examples:
+        msg += ("\nNo \"examples\" in the header — the menu-bar voice matcher "
+                "never selects example-less macros. Add 2-4 spoken phrasings "
+                "(lowercase, slot values verbatim in the utterance).")
+    blind_clicks = sum(
+        1 for op in mf.actions
+        if op.get("do") in ("click", "double_click", "right_click")
+        and isinstance(op.get("target"), dict)
+        and "x" in op["target"]
+        and not any(k in op["target"] for k in ("text", "ax", "patch")))
+    if blind_clicks:
+        msg += (f"\n{blind_clicks} coordinate-only click(s) — pixel targets "
+                "break on layout changes; prefer {\"text\": ...} or AX "
+                "anchors, or run verify_macro + replay --learn to attach "
+                "patch anchors.")
+    literals = [op["text"] for op in mf.actions
+                if op.get("do") == "type" and isinstance(op.get("text"), str)
+                and "{" not in op["text"] and len(op["text"].strip()) >= 3]
+    if literals:
+        shown = ", ".join(repr(t if len(t) <= 40 else t[:37] + "...")
+                          for t in literals[:3])
+        msg += (f"\nLiteral typed text: {shown} — if any of these vary per "
+                "use (a search term, a name, a message), promote them to "
+                "{slot} placeholders with a description + example so the "
+                "voice matcher can fill them; keep them literal only if the "
+                "macro should always type exactly this.")
     if replaced:
         msg += "\nsuperseded same-task macro(s), archived: " + ", ".join(replaced)
     if terminal_assert(mf):
@@ -365,8 +447,11 @@ async def _targeted_computer(app: str | None):
     await c.connect()
     if app:
         wins = (await c.tool("list_windows")).get("windows", [])
+        from .driver import _usable_window
+
         mine = [w for w in wins
-                if (w.get("app_name") or "").lower() == app.lower() and w.get("title")]
+                if (w.get("app_name") or "").lower() == app.lower()
+                and _usable_window(w)]
         if not mine:
             await c.close()
             raise ValueError(f"no window found for app {app!r}")
@@ -506,6 +591,55 @@ def _tool_act(args: dict) -> dict:
                         is_error=code != 0)
 
 
+def _tool_begin_capture(args: dict) -> dict:
+    from .codex_capture import CaptureCompileError, begin_capture
+
+    try:
+        started = begin_capture(
+            str(args.get("name") or ""),
+            str(args.get("description") or ""),
+            str(args.get("when_to_use") or ""),
+        )
+    except CaptureCompileError as e:
+        return _text_result(str(e), is_error=True)
+    bridge_uri = Path(started["bridge_path"]).as_uri()
+    trace = json.dumps(started["trace_path"], ensure_ascii=False)
+    started["node_setup"] = (
+        f'var {{ wrapSkyForAxstream, unwrapSkyForAxstream }} = '
+        f'await import("{bridge_uri}");\n'
+        f'globalThis.sky = wrapSkyForAxstream(globalThis.sky, '
+        f'{{ tracePath: {trace} }});'
+    )
+    started["node_teardown"] = (
+        "globalThis.sky = unwrapSkyForAxstream(globalThis.sky);"
+    )
+    return _text_result(json.dumps(started, ensure_ascii=False))
+
+
+def _tool_compile_capture(args: dict) -> dict:
+    from .codex_capture import CaptureCompileError, compile_capture
+    from .macrofile import dumps
+
+    try:
+        mf = compile_capture(
+            str(args.get("capture_id") or ""),
+            name=str(args.get("name") or ""),
+            description=str(args.get("description") or ""),
+            when_to_use=str(args.get("when_to_use") or ""),
+            slots=args.get("slots") or {},
+            terminal_assert=args.get("terminal_assert"),
+        )
+    except CaptureCompileError as e:
+        return _text_result(f"capture could not compile: {e}", is_error=True)
+    result = _tool_write({"name": mf.name, "content": dumps(mf)})
+    blocks = result.get("content") or []
+    if blocks and blocks[0].get("type") == "text":
+        blocks[0]["text"] = (
+            f"compiled capture {args.get('capture_id')!r} into "
+            f"{len(mf.actions)} macro actions\n" + blocks[0]["text"])
+    return result
+
+
 def _handle_tool_call(name: str, args: dict) -> dict:
     if name == "verify_macro":
         return _tool_verify(args)
@@ -517,6 +651,10 @@ def _handle_tool_call(name: str, args: dict) -> dict:
         return _tool_check(args)
     if name == "act":
         return _tool_act(args)
+    if name == "begin_capture":
+        return _tool_begin_capture(args)
+    if name == "compile_capture":
+        return _tool_compile_capture(args)
     if name == "list_macros":
         return _tool_list_macros()
     if name == "replay_macro":

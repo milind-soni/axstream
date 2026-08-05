@@ -106,12 +106,20 @@ The action vocabulary:
 |------|--------|--------|
 | `click`        | `target` | click an element or point |
 | `double_click` | `target` | double-click |
+| `right_click`  | `target` | open the target's context menu |
+| `drag`         | `from`, `to` | drag between resize-aware window points |
 | `type`         | `text`   | type text into the focused field |
 | `key`          | `keys`   | press a key or chord, e.g. `["cmd","s"]` |
 | `scroll`       | `direction`, `clicks?` | scroll `up`/`down`/`left`/`right` |
 | `move`         | `target` | move the pointer |
 | `open`         | `target` (string) | open an app by name or a URL |
 | `wait`         | `ms`     | pause (e.g. to let a window settle) |
+| `wait_until`   | `target`, `timeout_ms?`, `poll_ms?` | poll until text/AX target appears |
+
+`wait_until` observes immediately, then polls until the target resolves or
+`timeout_ms` expires (default 2500ms). Prefer it over `wait` when the UI has a
+visible or accessibility-backed readiness signal: a fast UI proceeds without
+paying the full timeout, while a slow UI remains bounded.
 
 ### 3.2 `assert`
 
@@ -143,8 +151,8 @@ a dialog's contents, a page that must load) — not to "check" or "confirm."
 
 ## 4. Targets
 
-Actions that address a location (`click`, `double_click`, `move`, `assert`) take
-a `target`. Three forms, in order of preference:
+Actions that address a location or condition (`click`, `double_click`, `right_click`, `drag`, `move`,
+`wait_until`, `assert`) take a `target`. Three forms, in order of preference:
 
 **By element id** — references an element from the observation the runtime gave
 the model:

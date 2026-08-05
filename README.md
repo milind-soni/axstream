@@ -56,6 +56,7 @@ npx skills add milind-soni/axstream
 ```sh
 uv tool install axstream          # from PyPI — or: pip install axstream
 axstream install                  # wire the skill + MCP into Claude Code / Codex
+axstream menu                     # launch AxstreamBar — hold ⌃⌥ and speak
 ```
 
 One prerequisite for live execution either way: the cua-driver daemon
@@ -66,6 +67,19 @@ After install, your agent gets `/axstream` (status), `/axstream-teach`
 (compile a task into a macro), `/axstream-stats` (benchmark), the fast
 primitives (screen-as-text, batched verified actions), and the macro
 flywheel.
+
+`axstream menu` launches **AxstreamBar** (`swift/AxstreamBar`, a native Swift
+app): hold **⌃⌥**, speak, release — local whisper (large-v3-turbo) hears
+you, an embedding shortlist plus the fine-tuned matcher pick the workflow
+(~140ms combined), and the verified replay runs while a bottom-of-screen HUD
+narrates every step. Slots fill from your words (*"add a torus in blender"*),
+compound commands chain (*"open blender and select the shape and delete the
+shape"*), and anything unknown is constructed once by the LLM tier, executed,
+then saved back into the library with its variables identified — slow at
+most once. The dropdown shows verified/draft trust marks with recent
+workflows on top. Run history stores only macro names, timing, and outcomes —
+never slot values. Build + model download:
+[axstream.dev/docs/voice](https://axstream.dev/docs/voice).
 
 ## Run it
 
@@ -218,11 +232,34 @@ The agent gets **accelerator primitives** (`screen_text` — the window as OCR
 text with coordinates, ~200ms, instead of a screenshot; `find` — a
 click-ready target; `act` — a whole batch of verified actions in one call;
 `check` — a ~250ms outcome poll) plus the **macro flywheel**
-(`list/replay/read/write/verify_macro`). Any task the agent does once
+(`list/replay/read/write/verify_macro`) and the **native capture bridge**
+(`begin_capture/compile_capture`). Any task the agent does once
 compiles into a macro that replays in seconds with zero model calls — and is
 never trusted until the verify gate (`axstream verify <name>`: one live
 replay whose terminal assert must pass) stamps it. `axstream bench <name>`
 reports p50/p95 per op. Full guide: [axstream.dev/docs/agents](https://axstream.dev/docs/agents).
+
+Codex native computer use runs through its own `sky` runtime, so simply
+enabling cua-driver trajectory recording cannot observe those actions.
+`begin_capture` returns a tiny JavaScript facade for the initialized `sky`
+object. It logs successful native calls plus the accessibility state used to
+choose each `element_index`; `compile_capture` then converts that real trace
+into semantic AX targets, deterministic keys/types, slots, and a normal
+`.axstream` macro. Unsupported steps are refused rather than silently omitted.
+Full AX text is persisted only for actions that need `element_index` binding;
+ordinary observations retain a short window summary.
+Coordinate clicks and drags persist only the source screenshot dimensions,
+not its pixels. The compiler converts those points to window fractions, so
+replay scales correctly from native `sky`'s 1× app image to Retina driver
+pixels and survives ordinary window resizing. Missing dimensions make
+compilation fail honestly instead of producing a likely-wrong gesture.
+Run the returned teardown snippet when the first run finishes; capture JSONL
+lives under `~/.axstream/captures/` for inspection and may contain UI text
+that native computer use observed.
+
+Use `wait_until` in authored macros when visible text or an AX target signals
+readiness. It observes immediately and polls only until the condition appears,
+avoiding the fixed sleeps that often dominate an otherwise instant replay.
 
 ## Layout
 
@@ -236,11 +273,15 @@ axstream/
   driver.py          cua-driver backend (background, pid-addressed delivery)
   geometry.py        window-relative click remapping (moves + resizes)
   ocr.py             Apple Vision text anchors / assertions ([ocr] extra)
+  conditions.py      adaptive wait_until + terminal-assert polling
+  codex_capture.py   compile captured Codex native `sky` traces into macros
+  codex_bridge.mjs   recording facade for Codex native computer use
   patch.py           visual patch anchors for icon-only controls ([patch] extra)
   gate.py            verify-before-store gate + task-family dedup
   macros.py          frecency-ranked parameterized macro store
   macrofile.py       file-based macros (.axstream): header + spec JSONL
   replay.py          replay / list / bench — the agent-facing CLI
+  launcher.py        workflow catalog, frecency, private history, replay service
   mcp.py             MCP server: accelerator primitives + macro tools
   install.py         `axstream install` — skill + MCP wiring for agents
   skills/            the packaged Claude Code / Codex skill
@@ -248,6 +289,7 @@ axstream/
   capture.py         parameterize a successful run into a macro
   llm.py / prompt.py / runner.py / spec.py
 demo_dry.py          no-keys streaming-overlap demo
+swift/AxstreamBar/   the native voice menu bar app (hold ⌃⌥, speak, release)
 docs/                axstream.dev (Fumadocs)
 ```
 

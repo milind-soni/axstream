@@ -6,7 +6,7 @@ import asyncio
 import json
 
 from axstream.computer import MockComputer
-from axstream.driver import DriverComputer, window_pixels_from_screen
+from axstream.driver import DriverComputer, _usable_window, window_pixels_from_screen
 from axstream.macrofile import parse
 from axstream.replay import cmd_list, cmd_replay, run_actions
 
@@ -57,7 +57,41 @@ class FakeDriver(DriverComputer):
             return {"path": "ax", "verified": False, "effect": "unverifiable"}
         if name == "double_click" and "element_index" in args:
             return {"text": "AXOpen performed on element [12]."}
+        if name == "right_click" and "element_index" in args:
+            return {"path": "ax", "verified": False, "effect": "unverifiable"}
         return {"path": "cgevent", "verified": False, "effect": "unverifiable"}
+
+
+def test_front_window_keeps_new_substantial_untitled_document():
+    old = {**WINDOW, "window_id": 6, "title": "Old document", "z_index": 5}
+    new = {**WINDOW, "window_id": 7, "title": "", "z_index": 6,
+           "bounds": {"x": 10, "y": 20, "width": 500, "height": 500}}
+    strip = {**WINDOW, "window_id": 8, "title": "", "z_index": 10,
+             "bounds": {"x": 0, "y": 0, "width": 1512, "height": 33}}
+    driver = FakeDriver(windows=[strip, new, old])
+    picked = asyncio.run(driver._front_window(42))
+    assert picked["window_id"] == 7
+    assert _usable_window(new)
+    assert not _usable_window(strip)
+
+
+def test_front_window_rejects_titled_context_menu_remnant():
+    document = {**WINDOW, "window_id": 6, "title": "Untitled 4", "z_index": 5}
+    remnant = {**WINDOW, "window_id": 7, "title": "Window", "z_index": 9,
+               "bounds": {"x": 158, "y": 79, "width": 66, "height": 20}}
+    driver = FakeDriver(windows=[remnant, document])
+    assert not _usable_window(remnant)
+    assert asyncio.run(driver._front_window(42))["window_id"] == 6
+
+
+def test_front_window_prefers_title_over_offscreen_blank_placeholder():
+    titled = {**WINDOW, "window_id": 6, "title": "Real document",
+              "is_on_screen": False, "z_index": 5}
+    placeholder = {**WINDOW, "window_id": 7, "title": "",
+                   "is_on_screen": False, "z_index": 9,
+                   "bounds": {"x": 0, "y": 482, "width": 500, "height": 500}}
+    driver = FakeDriver(windows=[placeholder, titled])
+    assert asyncio.run(driver._front_window(42))["window_id"] == 6
 
 
 def run(actions, computer):
@@ -133,6 +167,8 @@ def test_cli_list(tmp_path, capsys, monkeypatch):
     row = json.loads(capsys.readouterr().out.strip())
     assert row["name"] == "note"
     assert row["slots"] == ["title"]
+    assert row["slot_specs"]["title"]["description"] == "text to type"
+    assert row["verified"] == "unverified"
     assert row["actions"] == 2
 
 
@@ -239,6 +275,28 @@ def test_double_click_pixel_fallback_window_local():
     args = [a for n, a in d.calls if n == "double_click"][-1]
     assert args["pid"] == 42 and args["window_id"] == 7
     assert (args["x"], args["y"]) == (800, 400)
+
+
+def test_right_click_ladder_uses_ax_show_menu():
+    op = {"op": "act", "do": "right_click",
+          "target": {"ax": {"title": "New Note"}}}
+    d = FakeDriver()
+    code, events = run([op], d)
+    assert code == 0
+    assert events[0]["via"] == "ax_element"
+    args = [a for n, a in d.calls if n == "right_click"][-1]
+    assert args.items() >= {
+        "pid": 42, "window_id": 7, "element_index": 12}.items()
+
+
+def test_right_click_pixel_fallback_is_window_local():
+    op = {"op": "act", "do": "right_click", "target": {"x": 500, "y": 250}}
+    d = FakeDriver()
+    code, events = run([op], d)
+    assert code == 0
+    assert events[0]["via"] == "window_pixel"
+    args = [a for n, a in d.calls if n == "right_click"][-1]
+    assert args.items() >= {"pid": 42, "window_id": 7, "x": 800, "y": 400}.items()
 
 
 class NoPressDriver(FakeDriver):

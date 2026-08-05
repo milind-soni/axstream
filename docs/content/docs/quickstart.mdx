@@ -129,17 +129,38 @@ uv run axstream install
 Full story: **[For coding agents](/docs/agents)**. OCR (text-anchor clicks, outcome
 asserts) is included by default.
 
-## 7. Speak instead of type
+## 7. Speak to your Mac — the menu bar app
+
+The flagship surface is **AxstreamBar**, a native Swift menu bar app:
+hold **⌃⌥**, speak, release — the action runs in well under a second of
+thinking, with a HUD at the bottom of the screen narrating every step.
 
 ```sh
-uv sync --extra voice
-uv run axstream up --voice
+cd swift/AxstreamBar && swift build -c release && cd ../..
+mkdir -p ~/.axstream/models
+curl -L -o ~/.axstream/models/ggml-large-v3-turbo-q5_0.bin \
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin"
+axstream menu
 ```
 
-First run downloads a local speech model (~600MB) and asks for microphone
-permission. Then just talk — pause about a second to commit, say "quit" to
-stop. Everything stays on your machine: mic → local STT → local matcher →
-executor. The only network call is the LLM tier for *novel* commands.
+(The Swift build links whisper.cpp statically — see
+[The voice menu bar](/docs/voice) for the one-time whisper.cpp build and the
+full story.) Grant **Microphone** and **Accessibility** to *AxstreamBar* when
+asked. Then:
+
+```
+hold ⌃⌥ … "add a torus in blender" … release
+  🎤 → "add a torus in blender" → ▶ blender-add-mesh · torus → ✓ 4.8s
+
+hold ⌃⌥ … "open blender and select the shape and delete the shape" … release
+  ▶ 1/3 open-app → ▶ 2/3 blender-select-all → ▶ 3/3 blender-delete-selected → ✓
+```
+
+The dropdown lists your recent workflows with trust marks (`✓` verified, `○`
+draft) — a just-recorded macro tops the list. Unknown commands fall through
+to the engine, which constructs them with an LLM and **saves the result as a
+macro with its variables identified** — slow at most once, spoken-instant
+forever after.
 
 ## Troubleshooting
 
@@ -149,7 +170,8 @@ uv run pytest tests         # the suite
 ```
 
 <Cards>
-  <Card title="Integrate your STT" href="/docs/integrate" description="You own audio → text; axstream owns text → action." />
+  <Card title="The voice menu bar" href="/docs/voice" description="Hold ⌃⌥, speak, release — the native app in depth." />
+  <Card title="Integrate your STT" href="/docs/integrate" description="Embedding axstream in your own voice product." />
   <Card title="The Spec" href="/docs/spec" description="The canonical wire format and execution contract." />
   <Card title="Roadmap" href="/docs/roadmap" description="What's shipped, what's next." />
 </Cards>

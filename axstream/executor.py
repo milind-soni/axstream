@@ -212,6 +212,15 @@ class Executor:
         if do == "wait":
             await asyncio.sleep(op["ms"] / 1000)
             return
+        if do == "wait_until":
+            from .conditions import wait_for_target
+
+            await wait_for_target(
+                self.computer, op["target"],
+                timeout_ms=op.get("timeout_ms", 2500),
+                poll_ms=op.get("poll_ms", 120),
+            )
+            return
         if do == "type":
             await self.computer.type_text(op["text"])
             return
@@ -225,12 +234,17 @@ class Executor:
         if do == "open":
             await self.computer.open(op["target"])
             return
-        # coordinate-taking actions: click / double_click / move
+        if do == "drag":
+            await self.computer.drag(op["from"], op["to"])
+            return
+        # coordinate-taking actions: click / double_click / right_click / move
         x, y = await self._coords(op["target"], do)
         if do == "click":
             await self.computer.click(x, y)
         elif do == "double_click":
             await self.computer.double_click(x, y)
+        elif do == "right_click":
+            await self.computer.right_click(x, y)
         elif do == "move":
             await self.computer.move(x, y)
         else:

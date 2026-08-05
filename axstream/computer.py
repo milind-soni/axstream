@@ -58,6 +58,13 @@ class Computer:
     async def double_click(self, x: float, y: float) -> None:
         await self.command("double_click", x=int(x), y=int(y))
 
+    async def right_click(self, x: float, y: float) -> None:
+        await self.command("right_click", x=int(x), y=int(y))
+
+    async def drag(self, from_target: dict, to_target: dict) -> dict:
+        raise ComputerError(
+            "resize-aware drag replay requires the cua-driver backend")
+
     async def move(self, x: float, y: float) -> None:
         await self.command("move_cursor", x=int(x), y=int(y))
 

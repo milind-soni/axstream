@@ -104,6 +104,11 @@ def actions_hash(mf: MacroFile) -> str:
     return hashlib.sha1(blob.encode()).hexdigest()[:12]
 
 
+def slot_value_hash(value: object) -> str:
+    """Privacy-preserving marker for first-run capture values."""
+    return hashlib.sha256(str(value).encode()).hexdigest()[:16]
+
+
 # -- gate predicates -------------------------------------------------------
 
 
@@ -195,6 +200,18 @@ def verify(name_or_path: str, slots: Optional[dict] = None,
         actions = mf.fill(fill)
     except MacroFileError as e:
         return {"ok": False, "reason": str(e)}
+    captured_hashes = mf.provenance.get("captured_slot_hashes")
+    if isinstance(captured_hashes, dict):
+        reused = sorted(
+            name for name, digest in captured_hashes.items()
+            if name in fill and slot_value_hash(fill[name]) == digest
+        )
+        if reused:
+            return {"ok": False, "reason":
+                    "verification must use fresh slot value(s), not the "
+                    f"captured first-run value: {', '.join(reused)}. "
+                    "A distinct value proves the terminal assertion did not "
+                    "pass on stale first-run UI."}
     recorded_window = mf.extra.get("window")
     if isinstance(recorded_window, dict):
         actions = annotate_window_relative(actions, recorded_window)

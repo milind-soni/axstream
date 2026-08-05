@@ -47,6 +47,17 @@ One language, three speeds:
 - **Fallback** — apps with no clean accessibility surface get driven by
   computer use.
 
+## Hold ⌃⌥ and talk
+
+The reference surface is **AxstreamBar**, a native menu bar app: hold
+control-option, speak, release. Local whisper hears you (~450ms), an
+embedding shortlist plus the fine-tuned matcher pick the workflow (~140ms),
+and the verified replay runs — with a HUD narrating every step. Compound
+commands chain (*"open blender and add a sphere then delete the shape"*),
+slots fill from your words, and anything unknown is constructed once by an
+LLM and saved as a workflow with its variables identified.
+**[→ The voice menu bar](/docs/voice)**
+
 ## Not just voice: your coding agent's fast hands
 
 The same replay layer plugs into **Claude Code and Codex** — one
@@ -68,12 +79,15 @@ From the reference implementation, on a live macOS machine:
 | Full plan from a fast LLM (Groq, one burst) | ~0.4s |
 | Streaming execution vs wait-then-act | 37% wall-clock saved |
 | Instant tier: match a spoken command | ~100ms |
-| Instant-tier accuracy ([open fine-tuned 350M matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)) | 94% end-to-end |
+| Instant-tier accuracy ([open fine-tuned 350M matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher), v2) | 96% on the live-library battery |
+| Wrong-action rate on unknown commands (v2 vs v1) | 23% → 4.8% |
+| Embedding shortlist recall@3 over the live library | 100% |
 
 The format is model-agnostic and transport-agnostic: any LLM that can stream
 text can produce it; any runtime that can parse a line can perform it.
 
 <Cards>
+  <Card title="The voice menu bar" href="/docs/voice" description="Hold ⌃⌥, speak, release — the native app." />
   <Card title="The Spec" href="/docs/spec" description="The action language: wire format, actions, execution contract." />
   <Card title="Quickstart" href="/docs/quickstart" description="See it run in two minutes, no keys required." />
   <Card title="For coding agents" href="/docs/agents" description="Fast verified computer use for Claude Code & Codex — one install." />

@@ -111,6 +111,35 @@ def test_verify_fails_on_replay_failure(tmp_path, monkeypatch):
     assert gate.verification(load(p))["state"] == "unverified"
 
 
+def test_captured_macro_verification_requires_fresh_slot_value(tmp_path, monkeypatch):
+    header = {
+        "name": "captured",
+        "slots": {"query": {"example": "first run"}},
+        "provenance": {
+            "source": "codex-computer-use-trace",
+            "captured_slot_hashes": {
+                "query": gate.slot_value_hash("first run")},
+        },
+    }
+    p = tmp_path / "captured.axstream"
+    p.write_text("\n".join([json.dumps(header)]
+                             + [json.dumps(op) for op in BASE]) + "\n")
+    called = {"replay": False}
+
+    async def fake_replay(actions, emit, delivery=None):
+        called["replay"] = True
+        emit({"ok": True, "completed": len(actions), "total": len(actions)})
+        return 0
+
+    monkeypatch.setattr(gate, "_replay_once", fake_replay)
+    stale = gate.verify(str(p), {"query": "first run"})
+    assert not stale["ok"] and "fresh slot" in stale["reason"]
+    assert not called["replay"]
+
+    fresh = gate.verify(str(p), {"query": "second run"})
+    assert fresh["ok"] and called["replay"]
+
+
 # -- upsert-by-signature ----------------------------------------------------
 
 def test_upsert_conflicts_and_archive(tmp_path, monkeypatch):

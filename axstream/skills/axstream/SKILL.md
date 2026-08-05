@@ -18,13 +18,17 @@ milliseconds and return text, not images:
   `assert` guards). Plan the sequence once; don't take a model turn per step.
 - `check` (~250ms) — verify an outcome ("results page shows my query")
   without a verification screenshot.
+- `begin_capture` + `compile_capture` — wrap Codex's initialized native `sky`
+  computer-use object, record successful actions plus their preceding AX
+  state, then compile that real trace into a parameterized macro. This is the
+  native fallback bridge; cua-driver's recorder cannot observe `sky` calls.
 
 The compile loop (this is what makes everything fast over time): novel task
--> do it with ONE `act` batch (assert-guarded) -> if it succeeded, you
-already hold the exact op list -> `write_macro` it -> `verify_macro` when a
-live re-run is safe -> from then on it's a single `replay_macro` call. Fall
-back to native computer use for what the primitives can't express — and
-route smartly (benchmarked, 2026-07-30):
+-> use ONE `act` batch when the steps are clear, OR call `begin_capture`
+before a native Codex computer-use fallback -> if it succeeded,
+`write_macro` the act ops or `compile_capture` the native trace ->
+`verify_macro` when a live re-run is safe -> from then on it's a single
+`replay_macro` call. Route smartly (benchmarked, 2026-07-30):
 
 - VISUAL-STATE questions (which item is selected/highlighted, colors,
   rendered appearance) -> go native DIRECTLY. OCR text cannot see selection
@@ -63,8 +67,64 @@ full perceive→think→act loop. The more tasks you save, the faster you get.
    examples). Sanity-check the ops match the intent.
 3. **Run**: `axstream replay <name> --slots '{"slot": "value"}'`
 4. **After doing a UI task manually** (the slow way): write the steps as a
-   macro file (format below), `--dry` it, replay it once to verify, and save
-   it to `~/.axstream/macros/<name>.axstream`. Next time it's one command.
+   macro file (format below), or compile the native trace as described next;
+   `--dry` it, replay it once to verify, and save it to
+   `~/.axstream/macros/<name>.axstream`. Next time it's one command.
+
+Saving rules — macros are also launched by VOICE from the menu bar, and the
+library is shared, so:
+
+- Add `"examples"` to the header: 2–4 short utterances phrased the way a
+  person would SAY the task out loud (lowercase, no punctuation), each
+  slotted example containing its slot values verbatim, e.g.
+  `{"utterance": "google mumbai weather", "slots": {"query": "mumbai weather"}}`.
+  The voice matcher effectively never picks a template with no examples.
+- Save under a NEW distinct name; NEVER delete, rename, or overwrite another
+  macro file — even one that looks similar (a sphere macro is not a cylinder
+  macro). True same-task twins are deduplicated automatically by
+  `write_macro`'s signature upsert, which archives rather than deletes.
+  Deleting a neighbor macro silently breaks the user's voice commands.
+
+Deriving a macro from an existing flow (the preferred construction): when a
+requested task differs from an existing macro only in a literal (a typed
+search term, a URL, a filename), do NOT clone the macro per variant —
+generalize the existing one by promoting that literal to a `{slot}` with a
+`description` + `example`, add example utterances covering the variants, and
+re-verify. One `blender-add-mesh` with a `{shape}` slot replaces
+sphere/cube/cylinder clones and handles shapes nobody recorded. A macro is
+NOT done until `verify_macro` passes: the live gate is what catches
+background-input apps (it auto-learns `"delivery": "foreground"`), wrong-key
+assumptions, and drifted anchors. Never write an assert that would pass even
+if the task failed (asserting always-visible chrome proves nothing).
+
+## Capturing a Codex native computer-use fallback
+
+Use this when native computer use is the right first-run executor but the
+workflow is worth repeating:
+
+1. Call `begin_capture` with a short name, description, and `when_to_use`.
+2. Initialize native computer use normally. Run the exact `node_setup` snippet
+   returned by `begin_capture`; it replaces `globalThis.sky` with a thin
+   recording facade while delegating every call to the original native object.
+3. Drive the task normally. Call `get_app_state` immediately before any
+   `element_index` action so the trace contains the durable role/title that
+   index represented, and before coordinate clicks/drags so it records the
+   source screenshot dimensions needed for Retina/resize-aware replay. Only
+   successful actions are compiled.
+4. After confirming the real outcome, call `compile_capture` with the
+   `capture_id`. Parameterized values use
+   `{"slot": {"value": "first-run value", "description": "...",
+   "example": "..."}}`. Include a `terminal_assert` target.
+5. Run the `node_teardown` snippet returned by `begin_capture` so later native
+   actions stop appending to this trace. Captures are inspectable JSONL under
+   `~/.axstream/captures/` and may contain UI text seen during the workflow.
+6. Dry-run the macro, then `verify_macro` with a DIFFERENT slot value when a
+   live rerun is safe. A different value prevents stale first-run UI from
+   falsely satisfying the verification gate.
+
+The compiler refuses native actions it cannot translate faithfully instead
+of saving a partial macro. Keep those steps in native computer use until an
+equivalent Axstream op exists.
 
 Prerequisite: `axstream --doctor` must show `[ok] cua-driver`. If not, tell
 the user the cua-driver daemon isn't running rather than falling back
@@ -111,8 +171,9 @@ Line 1: JSON header. Then one op per line. `#` comments and blank lines ok.
 {"op": "done", "status": "success"}
 ```
 
-Ops: `open` (app name or URL) · `click` / `double_click` · `type` · `key` ·
-`scroll` (`direction`, `clicks`) · `wait` (`ms`) · `move` ·
+Ops: `open` (app name or URL) · `click` / `double_click` / `right_click` · `drag` · `type` · `key` ·
+`scroll` (`direction`, `clicks`) · `wait` (`ms`) · `wait_until` (`target`,
+optional `timeout_ms` / `poll_ms`) · `move` ·
 `assert` (precondition: fail fast if a target is missing) · `done`.
 
 Click targets — richest wins, always include fallbacks when you have them:
@@ -134,6 +195,8 @@ Authoring rules that keep macros reliable:
 
 - Prefer `key` shortcuts over clicking chrome (`cmd+n` beats clicking a
   toolbar "+"). Keyboard ops replay perfectly every time.
+- Prefer `wait_until` over a fixed `wait` whenever visible text or an AX target
+  signals readiness. It observes immediately and waits only as long as needed.
 - Never target text the macro itself types (it changes every run).
 - Put an `assert` before risky sequences so a changed UI fails fast.
 - Slots: `{slot_name}` inside any string; declare each in the header with a

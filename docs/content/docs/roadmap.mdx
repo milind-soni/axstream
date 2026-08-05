@@ -8,56 +8,93 @@ description: What's shipped, what's next.
 - **The spec + streaming runtime** — newline-committed compiler, pipelined
   executor, accessibility-tree observation (~150ms scoped). Streaming execution
   saves ~37% wall-clock vs wait-then-act.
-- **The instant tier** — learned commands replay with no LLM: a local 350M
-  matcher resolves utterance → macro + slots in ~100ms at 94% end-to-end
-  accuracy, guarded against the live screen, with frecency ranking. A failed
-  match falls back to the LLM tier. The matcher is
+- **PyPI + plugin distribution** — `pip install axstream` /
+  `uv tool install axstream`; `axstream install` wires the skill + MCP server
+  into Claude Code and Codex from the packaged wheel; the repo doubles as a
+  Claude Code plugin marketplace.
+- **AxstreamBar — the native voice menu bar** — a Swift app: hold ⌃⌥,
+  speak, release. whisper.cpp statically linked (Metal, large-v3-turbo by
+  default), a bottom-of-screen HUD narrating every state, slot filling from
+  speech, and compound-command chaining (*"open blender and add a sphere
+  then delete the shape"*) that only engages when every clause matches.
+  Recent workflows top the dropdown; apps restore from the Dock and front
+  correctly whatever state they're in; mics can be hot-swapped mid-session.
+  See [The voice menu bar](/docs/voice).
+- **The matcher, v2** — retrained on a harder curriculum: variable library
+  sizes (10–40 templates), sibling families, deliberate look-alike traps,
+  and description-only templates. Wrong-action on unknown commands 23% →
+  4.8%; exact-example recall 100% at 25+ templates; accuracy flat as the
+  library grows. Trained on a rented GPU for ~$1 with a one-command cloud
+  round; eval gates are part of the training repo.
+- **The embedding shortlist** — a local embedding model preranks the library
+  to 10 candidates per utterance (measured recall@3 = 100%), keeping the
+  matcher's prompt small and in-distribution at any library size. Membership
+  by similarity, stable ordering, graceful fallback.
+- **The closed flywheel** — novel commands are constructed by the LLM tier,
+  executed, then parameterized (variables identified by a model) and saved
+  into the file library in the background; engine-store templates migrate to
+  files on their first successful run. Every command is slow at most once —
+  and everything learned is visible, editable, verifiable.
+- **Fuzzy app launch** — "open apple maps" resolves against the installed-app
+  list (exact → token subset → edit distance): Maps, Google Chrome, System
+  Settings all answer to their spoken names; domain-shaped targets
+  ("github.com") open as URLs regardless of how they were matched.
+- **The instant tier** — learned commands replay with no LLM: local matcher
+  resolves utterance → macro + slots in ~100–150ms, guarded against the live
+  screen, with frecency ranking. The matcher is
   [published on Hugging Face](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
   (LoRA adapter included).
 - **The verified replay ladder** — clicks resolve accessibility element →
   OCR text anchor (on-device Apple Vision, ~25ms) → visual patch anchor
   (template match, for icon-only controls) → window-relative pixels
   (edge-anchored, survives window moves *and* resizes — or refuses honestly).
-  Pixel clicks skip the element walk entirely (~15ms geometry on repeats).
   Every progress line reports which rung verified the click.
 - **Outcome assertions + the verify gate** — a macro ends with an OCR assert
-  that proves the task happened (~250ms); `axstream verify` replays once live
-  and stamps the macro `verified` (following
-  [PreAct](https://arxiv.org/abs/2606.17929)'s gate result). Saving a
-  same-task macro replaces its twin instead of accumulating duplicates.
-- **Agent integration** — `axstream install` wires a skill + MCP server into
-  Claude Code and Codex: accelerator primitives (`screen_text`, `find`,
-  `act`, `check`) plus the macro flywheel
-  (`list/replay/read/write/verify_macro`). See
-  [For coding agents](/docs/agents).
-- **`axstream bench`** — p50/p95 per op across warmed runs; regressions are a
-  number, not a feeling.
-- **A starter library** — ~180 keyboard-first macros across Finder, Safari,
-  Chrome, Firefox, Mail, Notes, Calendar, Messages, Music, Terminal, VS Code,
-  Slack, Zoom and system-wide commands, seeded on first run.
-- **The execution backend** — `cua-driver`: background, pid-addressed
-  delivery with no focus stealing; your mouse stays yours.
+  that proves the task happened; `axstream verify` replays once live and
+  stamps the macro `verified` (following
+  [PreAct](https://arxiv.org/abs/2606.17929)'s gate result), auto-learning
+  foreground delivery for apps that ignore background input. Saving a
+  same-task macro archives its twin instead of accumulating duplicates —
+  and never deletes.
+- **Agent integration** — `axstream install`: accelerator primitives
+  (`screen_text`, `find`, `act`, `check`) plus the macro flywheel
+  (`list/replay/read/write/verify_macro`) with authoring lints (missing
+  asserts, coordinate-only clicks, undeclared slot candidates, missing
+  spoken examples). See [For coding agents](/docs/agents).
+- **Native Codex capture** — `begin_capture` wraps Codex's real `sky` runtime
+  for one successful task, then `compile_capture` turns that trace into a
+  semantic, slot-parameterized macro that arrives voice-matchable (a spoken
+  example is seeded at compile time).
+- **Adaptive waits, bench, starter library, background delivery** —
+  `wait_until` condition waits; `axstream bench` p50/p95 per op; ~180
+  keyboard-first starter macros; `cua-driver` background pid-addressed
+  delivery with no focus stealing.
 
 ## Next
 
-- **PyPI release** — `pip install axstream` without a clone; `axstream
-  install` already handles agent wiring from the packaged wheel.
-- **Sub-second actions** — the dominant per-action cost left is a fixed 1s
+- **Matcher round 4** — a small data patch for the phrasing shapes v2 became
+  over-conservative about ("open the browser and search for…"), plus
+  value-mapping slots (say "times", click the button named "Multiply") —
+  currently those tasks stay on the engine tier by design.
+- **Sub-second actions** — the dominant per-action cost left is a fixed
   post-action observation inside the driver; a driver-side flag takes a
   verified click from ~1.3s to ~0.3s.
-- **Compile-from-run** — a successful `act` batch returns a ready-to-save
-  macro draft (slots lifted, guards attached) so "did it once" becomes
-  "compiled" automatically.
+- **Signed app + login item** — sign/notarize AxstreamBar and add an opt-in
+  "Launch at Login" so the voice bar survives reboots without a terminal.
+- **One-click repair handoff** — a failed replay should open your coding
+  agent with the macro, exact `failed_at` action, and reason attached, then
+  mark the repaired macro stale until re-verified.
+- **Auto-verify at the end of the teach flow** — recordings should arrive
+  either ✓-stamped or with an honest failure reason, with no agent
+  discipline required.
+- **Streaming voice** — eager execution on stable partial transcripts, so
+  the action starts before you finish the sentence.
+- **Searchable workflow library** — a keyboard-first panel for when the
+  library grows past what a dropdown can show.
 - **The repair tier** — on an honest refusal, one grounded model call
   relocates the target, verifies it, and writes the fix back into the macro:
   macros anneal instead of rot. Models stay at the edges (learn time, repair
   time) — never in the replay loop.
-- **Streaming voice** — hands-free local STT ships today (`axstream up
-  --voice`); next is eager execution on stable partials.
-- **A trained action model** — a small model fine-tuned to drive macOS from
-  accessibility-tree text, replacing the hosted LLM in the fast tier. The
-  spec + runtime stay open (MIT / CC BY 4.0); trained models and datasets are
-  developed separately.
 
 ---
 

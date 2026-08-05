@@ -9,7 +9,7 @@ speaks JSONL back: one progress object per action, and on failure a final
 with a non-zero exit, so a coding agent knows exactly which action to take
 over from.
 
-click/double_click targets resolve through a strict preference ladder
+click/double_click/right_click targets resolve through a strict preference ladder
 (never scope="desktop" — that steals the user's real mouse):
 
   1. AX ELEMENT — fresh get_window_state snapshot per click, fuzzy-match the
@@ -59,6 +59,7 @@ from typing import Callable, Optional
 from . import ocr
 from . import patch as patchmod
 from .ax import Snapshot, resolve_window_element
+from .conditions import ConditionTimeout, wait_for_target
 from .driver import window_pixels_from_screen
 from .executor import Executor
 from .geometry import GeometryMismatch, annotate_window_relative, remap_offset
@@ -127,7 +128,9 @@ async def _click_dispatch(computer, do: str, pid: int, window_id: int,
                           x: float, y: float) -> dict:
     if do == "click":
         return await computer.click_window_pixel(pid, window_id, x, y)
-    return await computer.double_click_window_pixel(pid, window_id, x, y)
+    if do == "double_click":
+        return await computer.double_click_window_pixel(pid, window_id, x, y)
+    return await computer.right_click_window_pixel(pid, window_id, x, y)
 
 
 async def _click_via_ladder(computer, op: dict, learn: bool = False) -> dict:
@@ -169,8 +172,10 @@ async def _click_via_ladder(computer, op: dict, learn: bool = False) -> dict:
             try:
                 if do == "click":
                     res = await computer.click_element(snap.pid, snap.window_id, idx)
-                else:
+                elif do == "double_click":
                     res = await computer.double_click_element(snap.pid, snap.window_id, idx)
+                else:
+                    res = await computer.right_click_element(snap.pid, snap.window_id, idx)
                 line = {"via": "ax_element",
                         "resolved": f"{el.get('role', '')} {el.get('label', '')!r} [element {idx}]"}
                 line.update(_driver_evidence(res))
@@ -352,42 +357,33 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json,
                 continue
             if kind == "assert":
                 target = op.get("target") or {}
-                if isinstance(target.get("text"), str) and target["text"].strip():
-                    # OCR outcome assertion: the text must be VISIBLE in the
-                    # window (e.g. assert the results page shows the typed
-                    # query). Polls briefly — pages/UI need a beat to render.
-                    hit = None
-                    for delay in (0.0, 0.4, 0.8, 1.2):
-                        if delay:
-                            await asyncio.sleep(delay)
-                        g = await computer.window_geometry(fresh_shot=True)
-                        if g is not None and g.fresh_shot and g.shot_path:
-                            hit = ocr.find_text(g.shot_path, target["text"])
-                            if hit is not None:
-                                break
-                    if hit is None:
-                        suffix = ("" if ocr.available() else
-                                  " (OCR unavailable — pip install axstream)")
-                        raise ReplayFailure(
-                            f"assert failed: text {target['text']!r} not "
-                            f"visible in the window{suffix}")
-                    emit({"i": i, "op": op, "ok": True, "via": "ocr",
-                          "resolved": f"text {hit.text!r} visible [{hit.level} ocr]",
-                          "ms": int((time.perf_counter() - t0) * 1000)})
-                    completed += 1
-                    continue
-                ax = target.get("ax") or {}
-                el = executor.snapshot.resolve_element(ax) or await executor._refresh_and_resolve(ax)
-                if el is None:
-                    raise ReplayFailure(
-                        f"assert failed: target did not resolve: {json.dumps(op.get('target'))}")
-                emit({"i": i, "op": op, "ok": True, "via": "ax",
-                      "resolved": f"{el.role} {el.title!r}",
-                      "ms": int((time.perf_counter() - t0) * 1000)})
+                try:
+                    info = await wait_for_target(
+                        computer, target,
+                        timeout_ms=op.get("timeout_ms", 2500),
+                        poll_ms=op.get("poll_ms", 120),
+                    )
+                except ConditionTimeout as exc:
+                    raise ReplayFailure(f"assert failed: {exc}") from exc
+                emit({"i": i, "op": op, "ok": True,
+                      "ms": int((time.perf_counter() - t0) * 1000), **info})
                 completed += 1
                 continue
             # kind == "act"
-            if op.get("do") in ("click", "double_click"):
+            if op.get("do") == "wait_until":
+                try:
+                    info = await wait_for_target(
+                        computer, op.get("target") or {},
+                        timeout_ms=op.get("timeout_ms", 2500),
+                        poll_ms=op.get("poll_ms", 120),
+                    )
+                except ConditionTimeout as exc:
+                    raise ReplayFailure(f"wait_until failed: {exc}") from exc
+                emit({"i": i, "op": op, "ok": True,
+                      "ms": int((time.perf_counter() - t0) * 1000), **info})
+                completed += 1
+                continue
+            if op.get("do") in ("click", "double_click", "right_click"):
                 info = await _click_via_ladder(computer, op, learn=learn)
                 fragment = info.pop("_learned_patch", None)
                 if fragment is not None and learned is not None:
@@ -404,6 +400,19 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json,
                     blind.append(i)
                 emit({"i": i, "op": op, "ok": True,
                       "ms": int((time.perf_counter() - t0) * 1000), **info})
+                completed += 1
+                continue
+            if op.get("do") == "drag":
+                info = await computer.drag(op["from"], op["to"])
+                blind.append(i)
+                line = {"i": i, "op": op, "ok": True,
+                        "ms": int((time.perf_counter() - t0) * 1000)}
+                if isinstance(info, dict):
+                    for field in ("via", "geometry"):
+                        if field in info:
+                            line[field] = info[field]
+                    line.update(_driver_evidence(info))
+                emit(line)
                 completed += 1
                 continue
             exec_op, via, resolved = await _resolve_act(executor, op)
@@ -425,8 +434,8 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json,
     if blind:
         # surfaced so a caller (or agent) knows to confirm the end state
         summary["unverified_steps"] = blind
-        summary["note"] = (f"{len(blind)} step(s) clicked without target "
-                           "verification (blind pixel click or suspected "
+        summary["note"] = (f"{len(blind)} step(s) acted without target "
+                           "verification (blind pixel gesture or suspected "
                            "no-op) — confirm the end state before trusting "
                            "this run")
     emit(summary)
@@ -519,7 +528,9 @@ def cmd_replay(argv: list[str]) -> int:
         learned: dict[int, dict] = {}
         try:
             return await run_actions(actions, computer,
-                                     learn=args.learn, learned=learned)
+                                     learn=args.learn, learned=learned,
+                                     emit=lambda line: (events.append(line),
+                                                        _print_json(line))[1])
         finally:
             await computer.close()
             if learned:
@@ -532,7 +543,15 @@ def cmd_replay(argv: list[str]) -> int:
                     _print_json({"learned_patches": 0,
                                  "error": f"could not save patches: {e}"})
 
-    return asyncio.run(go())
+    events: list[dict] = []
+    started = time.perf_counter()
+    code = asyncio.run(go())
+    from .launcher import record_outcome
+
+    record_outcome(mf.name, code,
+                   round((time.perf_counter() - started) * 1000),
+                   slots.keys(), events[-1] if events else {})
+    return code
 
 
 def cmd_bench(argv: list[str]) -> int:
@@ -638,6 +657,8 @@ def cmd_list(argv: list[str]) -> int:
                         help="one JSON object per macro")
     args = parser.parse_args(argv)
 
+    from .gate import verification
+
     found = discover()
     if not found:
         dirs = ", ".join(str(d) for d in macro_dirs())
@@ -654,10 +675,14 @@ def cmd_list(argv: list[str]) -> int:
         if args.as_json:
             _print_json({"name": mf.name, "description": mf.description,
                          "when_to_use": mf.when_to_use, "slots": sorted(mf.slots),
+                         "slot_specs": mf.slots,
+                         "verified": verification(mf)["state"],
                          "provenance": mf.provenance, "actions": len(mf.actions),
                          "file": str(path)})
         else:
             slot_part = f" ({{{slots}}})" if slots else ""
             desc = mf.description or mf.when_to_use
-            print(f"{mf.name:24}{slot_part:20} {desc}  [{path}]")
+            state = verification(mf)["state"]
+            trust = {"verified": "✓", "unverified": "○", "stale": "↻"}.get(state, "!")
+            print(f"{trust} {mf.name:22}{slot_part:20} {desc}  [{path}]")
     return 0

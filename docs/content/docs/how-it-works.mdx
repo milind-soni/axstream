@@ -46,8 +46,32 @@ actions. Three properties make it trustworthy:
 - **When unsure, it says "none".** A wrong "none" costs one slow LLM call.
   A wrong match could do the wrong thing — so it's trained to refuse.
 
-Fine-tuning took it from 47% to 94% end-to-end — trained in under 4 minutes
-on one rented GPU for about ten cents.
+Fine-tuning took it from 47% to 94% end-to-end — trained in minutes on one
+rented GPU for well under a dollar. The current **v2** round trained on a
+harder curriculum — variable library sizes (10–40 templates), near-identical
+sibling commands, deliberate look-alike traps ("open apple maps" when no
+maps command exists), and description-only templates — taking wrong-action
+on unknown commands from 23% to under 5% and holding accuracy flat as the
+library grows.
+
+## The shortlist
+
+Before the matcher sees anything, a small local embedding model ranks the
+whole library against your words and passes only the **top 10** candidates.
+Measured on the live library, the right command is in that shortlist 100%
+of the time — so the matcher's prompt stays small and in-distribution no
+matter how many workflows you accumulate. Similarity decides *membership*
+only; the candidates keep their stable library order (ordering by similarity
+measurably flips borderline picks). If the embedding server is down, the
+full ranked library is used instead — strictly graceful.
+
+## Chains
+
+Compound commands — *"open blender and add a sphere then delete the
+shape"* — split on *and*/*then* and run as a sequence, but **only when every
+clause matches a known command**; otherwise the utterance is matched whole,
+so false splits are harmless. Each step is verified before the next fires,
+and the chain stops honestly at the first failure.
 
 ## The library
 
@@ -71,6 +95,14 @@ after. Commands you use most float to the top (the same frequency-plus-recency
 ranking [zoxide](https://github.com/ajeetdsouza/zoxide) uses for directories),
 replays are guarded against the live screen, and anything hard to undo is
 gated behind a risk flag.
+
+File macros — the human-readable `.axstream` files in `~/.axstream/macros/`
+that agents author and the menu bar replays — are the durable form of the
+same idea, with slots, spoken examples, and a verification stamp earned by
+one live gated replay. Two background mirrors keep the two forms converging:
+every novel task the LLM tier completes is parameterized and saved as a
+file, and every store template that executes successfully migrates to a file
+on its first run. Nothing ever overwrites a hand-authored macro.
 
 That's the whole system: recognize or learn, stream instead of wait, and get
 faster the more you use it.
