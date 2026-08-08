@@ -552,7 +552,10 @@ def cmd_replay(argv: list[str]) -> int:
 
     events: list[dict] = []
     started = time.perf_counter()
+    started = time.perf_counter()
     code = asyncio.run(go())
+    from .ledger import record
+    record(mf.name, code, round((time.perf_counter() - started) * 1000), events)
     return code
 
 

@@ -61,6 +61,9 @@ def main() -> None:
     if argv and argv[0] == "phone":
         from .phone_cli import cmd_phone
         sys.exit(cmd_phone(argv[1:]))
+    if argv and argv[0] == "stats":
+        from .ledger import cmd_stats
+        sys.exit(cmd_stats(argv[1:]))
     if argv and argv[0] == "verify":
         from .gate import cmd_verify
         sys.exit(cmd_verify(argv[1:]))
