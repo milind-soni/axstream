@@ -357,6 +357,9 @@ def main() -> None:
         sys.exit(cmd_verify(argv[1:]))
     if argv and argv[0] == "menu":
         sys.exit(_launch_menu_bar())
+    if argv and argv[0] == "phone":
+        from .phone_cli import cmd_phone
+        sys.exit(cmd_phone(argv[1:]))
 
     parser = argparse.ArgumentParser(prog="axstream")
     parser.add_argument("utterance", nargs="?",
