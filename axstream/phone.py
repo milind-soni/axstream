@@ -171,7 +171,7 @@ async def type_text(computer: DriverComputer, text: str,
     await ensure_ready(computer)
     for i, line in enumerate(text.split("\n")):
         if i:
-            await computer.key(["return"])
+            _hid_key(["return"])
         for ch in line:
             shifted = ch in _SHIFTED
             base = _SHIFTED.get(ch, ch)
@@ -179,9 +179,9 @@ async def type_text(computer: DriverComputer, text: str,
             if len(key) == 1 and not (key.isalnum() and key.isascii()):
                 raise ValueError(f"cannot type {ch!r} via keycodes")
             if shifted:
-                await computer.key(["shift", key])
+                _hid_key(["shift", key])
             else:
-                await computer.key([key])
+                _hid_key([key])
             if delay:
                 await asyncio.sleep(delay)
 
@@ -202,7 +202,7 @@ async def tap_text(computer: DriverComputer, query: str,
         visible = [h.text for h in hits][:30]
         raise RuntimeError(f"no visible text matches {query!r}; saw: {visible}")
     hit = matches[index]
-    await computer.click_window_pixel(snap.pid, snap.window_id, hit.x, hit.y)
+    await tap(computer, snap, hit.x, hit.y)
     return {"text": hit.text, "x": hit.x, "y": hit.y}
 
 
@@ -220,11 +220,115 @@ async def swipe(computer: DriverComputer, direction: str,
     dy = {"up": -1, "down": 1}.get(direction, 0) * size[1] * distance
     if not dx and not dy:
         raise ValueError(f"unknown direction {direction!r}")
-    w, h = (snap.bounds.get("width") or 1), (snap.bounds.get("height") or 1)
-    frag = {"w": w, "h": h}
-    await computer.drag(
-        {"win": {"fx": (cx - dx / 2) / size[0], "fy": (cy - dy / 2) / size[1], **frag}},
-        {"win": {"fx": (cx + dx / 2) / size[0], "fy": (cy + dy / 2) / size[1], **frag}})
+    x1, y1 = _screen_point(snap, cx - dx / 2, cy - dy / 2)
+    x2, y2 = _screen_point(snap, cx + dx / 2, cy + dy / 2)
+    _hid_drag(x1, y1, x2, y2, dur=0.12, steps=6)  # fast = a flick
+
+
+
+# --- hands: raw global-HID events, NOT the driver ---
+#
+# MEASURED (2026-08-09, iOS Simulator + iPhone Mirroring): the driver's
+# synthesized input reaches these video-stream windows at NO scope — not
+# pid-addressed background, not foreground-assisted, not scope="desktop".
+# Only raw CGEvents posted to the global HID tap (what phone-harness does)
+# are picked up by WindowServer and forwarded to the phone as touches. So
+# the driver is EYES here (capture / OCR / window discovery) and Quartz is
+# HANDS. The window must be frontmost first (ensure_ready guarantees it).
+
+def _post_mouse(etype, x, y):
+    import Quartz
+    ev = Quartz.CGEventCreateMouseEvent(
+        None, etype, Quartz.CGPointMake(x, y), Quartz.kCGMouseButtonLeft)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+
+
+def _hid_tap(x, y):
+    import Quartz, time as _t
+    _post_mouse(Quartz.kCGEventMouseMoved, x, y); _t.sleep(0.05)
+    _post_mouse(Quartz.kCGEventLeftMouseDown, x, y); _t.sleep(0.06)
+    _post_mouse(Quartz.kCGEventLeftMouseUp, x, y)
+
+
+def _hid_drag(x1, y1, x2, y2, steps=12, dur=0.25):
+    import Quartz, time as _t
+    _post_mouse(Quartz.kCGEventMouseMoved, x1, y1); _t.sleep(0.05)
+    _post_mouse(Quartz.kCGEventLeftMouseDown, x1, y1); _t.sleep(0.05)
+    for i in range(1, steps + 1):
+        f = i / steps
+        _post_mouse(Quartz.kCGEventLeftMouseDragged,
+                    x1 + (x2 - x1) * f, y1 + (y2 - y1) * f)
+        _t.sleep(dur / steps)
+    _post_mouse(Quartz.kCGEventLeftMouseUp, x2, y2)
+
+
+def _hid_key(key_names):
+    """Press a chord by driver-key-name list, via raw HID keycodes.
+    Modifiers (cmd/shift/option/ctrl) contribute flags, not keycodes; the
+    non-modifier key is the one actually pressed."""
+    import Quartz, time as _t
+    mods = 0
+    main_keys = []
+    for k in key_names:
+        kl = k.lower()
+        if kl in _MODMASK:
+            mods |= _MODMASK[kl]
+        else:
+            main_keys.append(kl)
+    if not main_keys:
+        raise ValueError(f"chord {key_names} has no non-modifier key")
+    code = _KEYCODE.get(main_keys[-1])
+    if code is None:
+        raise ValueError(f"unmappable key {main_keys[-1]!r} in {key_names}")
+    for down in (True, False):
+        ev = Quartz.CGEventCreateKeyboardEvent(None, code, down)
+        if mods:
+            Quartz.CGEventSetFlags(ev, mods)
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+        _t.sleep(0.03)
+
+
+def _keycodes():
+    import Quartz
+    codes = {"return": 36, "tab": 48, "space": 49, "delete": 51, "escape": 53,
+             "left": 123, "right": 124, "down": 125, "up": 126,
+             "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "7": 26,
+             "8": 28, "9": 25, "0": 29,
+             "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7,
+             "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
+             "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35, "l": 37,
+             "j": 38, "k": 40, "n": 45, "m": 46,
+             "period": 47, "comma": 43, "slash": 44, "semicolon": 41,
+             "quote": 39, "leftbracket": 33, "rightbracket": 30,
+             "backslash": 42, "minus": 27, "equal": 24, "grave": 50}
+    mods = {"cmd": Quartz.kCGEventFlagMaskCommand,
+            "shift": Quartz.kCGEventFlagMaskShift,
+            "option": Quartz.kCGEventFlagMaskAlternate,
+            "alt": Quartz.kCGEventFlagMaskAlternate,
+            "ctrl": Quartz.kCGEventFlagMaskControl}
+    return codes, mods
+
+
+_KEYCODE, _MODMASK = _keycodes()
+
+
+def _screen_point(snap: WindowSnapshot, px: float, py: float) -> tuple:
+    """OCR gives screenshot-PIXEL coords; a global-HID (desktop-scope) click
+    needs SCREEN points. Convert through the window's logical bounds."""
+    sw, sh = snap.screenshot_size or (0, 0)
+    if not sw or not sh:
+        raise RuntimeError("mirror window has no screenshot dimensions")
+    bx, by = snap.bounds.get("x", 0), snap.bounds.get("y", 0)
+    bw, bh = snap.bounds.get("width") or sw, snap.bounds.get("height") or sh
+    return bx + px * (bw / sw), by + py * (bh / sh)
+
+
+async def tap(computer: DriverComputer, snap: WindowSnapshot,
+              px: float, py: float) -> None:
+    """Tap at screenshot-pixel (px, py) via a global-HID desktop click — the
+    only channel the mirror window forwards to the phone."""
+    sx, sy = _screen_point(snap, px, py)
+    _hid_tap(sx, sy)
 
 
 def _visible_text(snap: WindowSnapshot) -> list:
@@ -249,21 +353,21 @@ def content_text(snap: WindowSnapshot, min_confidence: float = 0.4) -> list:
 
 async def home(computer: DriverComputer) -> None:
     await ensure_ready(computer)
-    await computer.key(["cmd", "1"])
+    _hid_key(["cmd", "1"])
     await asyncio.sleep(0.8)
 
 
 async def app_switcher(computer: DriverComputer) -> None:
     await ensure_ready(computer)
-    await computer.key(["cmd", "2"])
+    _hid_key(["cmd", "2"])
     await asyncio.sleep(0.8)
 
 
 async def open_app(computer: DriverComputer, name: str) -> None:
     """Open an app via the mirror's Spotlight (Cmd+3)."""
     await ensure_ready(computer)
-    await computer.key(["cmd", "3"])
+    _hid_key(["cmd", "3"])
     await asyncio.sleep(0.9)
     await type_text(computer, name)
     await asyncio.sleep(1.2)  # let results populate before committing
-    await computer.key(["return"])
+    _hid_key(["return"])
