@@ -1,24 +1,10 @@
-from .ax import Snapshot
-from .compiler import StreamCompiler
-from .computer import Computer, MockComputer
-from .driver import DriverComputer
-from .executor import BurstResult, Executor
-from .macros import Macro, MacroStore
-from .runner import run_task
-from .session import Session
-from .tiny import TinyMatcher
+"""axstream — fast, verified computer use that compiles.
 
-__all__ = [
-    "Snapshot",
-    "StreamCompiler",
-    "Computer",
-    "MockComputer",
-    "DriverComputer",
-    "BurstResult",
-    "Executor",
-    "Macro",
-    "MacroStore",
-    "run_task",
-    "Session",
-    "TinyMatcher",
-]
+The surface is small on purpose: a declarative macro format (macrofile),
+a verified click ladder and replay engine (replay), the verify-before-trust
+gate (gate), and the driver socket (driver). Agents consume it through the
+CLI and the MCP server; apps read the same .axstream files.
+"""
+from .macrofile import MacroFile, discover, load, parse, resolve_name, save
+
+__all__ = ["MacroFile", "discover", "load", "parse", "resolve_name", "save"]

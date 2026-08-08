@@ -8,14 +8,12 @@ from axstream.macrofile import (
     MacroFile,
     MacroFileError,
     dumps,
-    from_macro,
     load,
     parse,
     resolve_name,
     save,
-    to_macro,
 )
-from axstream.macros import Macro
+# removed: from axstream.macros import Macro
 
 HEADER = {
     "name": "new_note_titled",
@@ -149,16 +147,3 @@ def test_resolve_name_by_header_name(tmp_path):
     d.mkdir()
     p = save(parse(make_text()), d / "different_filename.axstream")
     assert resolve_name("new_note_titled", dirs=[d]) == p
-
-
-def test_store_bridge_round_trip():
-    mf = parse(make_text())
-    m = to_macro(mf)
-    assert isinstance(m, Macro)
-    assert m.id == "new_note_titled"
-    assert m.slots == ["title"]
-    assert m.actions == ACTIONS
-    back = from_macro(m)
-    assert back.name == m.id
-    assert back.actions == ACTIONS
-    assert set(back.slots) == {"title"}

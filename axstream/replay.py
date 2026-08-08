@@ -58,10 +58,9 @@ from typing import Callable, Optional
 
 from . import ocr
 from . import patch as patchmod
-from .ax import Snapshot, resolve_window_element
+from .ax import resolve_window_element
 from .conditions import ConditionTimeout, wait_for_target
 from .driver import window_pixels_from_screen
-from .executor import Executor
 from .geometry import GeometryMismatch, annotate_window_relative, remap_offset
 from .macrofile import (
     MacroFile,
@@ -84,27 +83,23 @@ class ReplayFailure(RuntimeError):
     """An action-level failure with an agent-readable reason."""
 
 
-async def _resolve_act(executor: Executor, op: dict) -> tuple[dict, Optional[str], Optional[str]]:
+async def _resolve_move(computer, op: dict):
     """Resolve a `move` target to concrete coords (the driver's overlay
-    cursor is visual-only, so screen coordinates are fine here).
-    click/double_click do NOT pass through here — see _click_via_ladder.
-
-    Order: AX label (fuzzy, live tree, one refresh) -> recorded coordinates.
-    Returns (executable op, via, resolved-element description)."""
-    do = op.get("do")
-    target = op.get("target")
-    if do != "move" or not isinstance(target, dict):
-        return op, None, None
-    ax = target.get("ax")
-    if isinstance(ax, dict) and (ax.get("role") or ax.get("title") or ax.get("id")):
-        el = executor.snapshot.resolve_element(ax) or await executor._refresh_and_resolve(ax)
-        if el is not None and el.center is not None:
-            resolved = {**op, "target": {"x": el.center[0], "y": el.center[1]}}
-            return resolved, "ax", f"{el.role} {el.title!r}"
+    cursor is visual-only, so screen coordinates are fine here). AX label
+    first against a fresh window snapshot, recorded coordinates second."""
+    target = op.get("target") or {}
+    ax = target.get("ax") if isinstance(target.get("ax"), dict) else None
+    if ax and (ax.get("role") or ax.get("title")):
+        snap = await computer.window_snapshot()
+        el = resolve_window_element(ax, snap.elements) if snap else None
+        if el is not None and el.get("frame"):
+            f = el["frame"]
+            return (f["x"] + f.get("w", 0) / 2, f["y"] + f.get("h", 0) / 2,
+                    "ax", f"{el.get('role','')} {el.get('label','')!r}")
     if "x" in target and "y" in target:
-        via = "coords_fallback" if isinstance(ax, dict) else "coords"
-        return {**op, "target": {"x": target["x"], "y": target["y"]}}, via, None
-    raise ReplayFailure(f"could not resolve target {json.dumps(target)}")
+        via = "coords_fallback" if ax else "coords"
+        return target["x"], target["y"], via, None
+    raise ReplayFailure(f"move: could not resolve target {json.dumps(target)}")
 
 
 def _driver_evidence(res: object) -> dict:
@@ -335,7 +330,6 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json,
     learn=True captures a visual patch anchor per verified-position click
     (see _click_via_ladder); fragments land in the caller-supplied `learned`
     dict keyed by action index, ready for macrofile.save_patches."""
-    executor = Executor(computer, Snapshot({}), allow_risky=True)
     completed = 0
     # A delivered action is not a LANDED action: the driver reports
     # effect:"unverifiable" when it cannot read back the result (a key press,
@@ -415,14 +409,27 @@ async def run_actions(actions: list[dict], computer, emit: Emit = _print_json,
                 emit(line)
                 completed += 1
                 continue
-            exec_op, via, resolved = await _resolve_act(executor, op)
-            await executor._execute(exec_op)
-            line: dict = {"i": i, "op": op, "ok": True,
-                          "ms": int((time.perf_counter() - t0) * 1000)}
-            if via:
+            do = op.get("do")
+            line: dict = {"i": i, "op": op, "ok": True}
+            if do == "type":
+                await computer.type_text(op["text"])
+            elif do == "key":
+                await computer.key(op["keys"])
+            elif do == "scroll":
+                await computer.scroll(op["direction"], op.get("clicks", 3))
+            elif do == "open":
+                await computer.open(op["target"])
+            elif do == "wait":
+                await asyncio.sleep(op.get("ms", 300) / 1000)
+            elif do == "move":
+                x, y, via, resolved = await _resolve_move(computer, op)
+                await computer.move(x, y)
                 line["via"] = via
-            if resolved:
-                line["resolved"] = resolved
+                if resolved:
+                    line["resolved"] = resolved
+            else:
+                raise ReplayFailure(f"unknown action {do!r}")
+            line["ms"] = int((time.perf_counter() - t0) * 1000)
             emit(line)
             completed += 1
         except Exception as e:  # noqa: BLE001 - every failure becomes the handoff JSON
@@ -546,11 +553,6 @@ def cmd_replay(argv: list[str]) -> int:
     events: list[dict] = []
     started = time.perf_counter()
     code = asyncio.run(go())
-    from .launcher import record_outcome
-
-    record_outcome(mf.name, code,
-                   round((time.perf_counter() - started) * 1000),
-                   slots.keys(), events[-1] if events else {})
     return code
 
 

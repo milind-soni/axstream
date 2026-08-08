@@ -349,11 +349,6 @@ def _tool_replay(args: dict) -> dict:
 
         started = time.perf_counter()
         code = asyncio.run(go())
-        from .launcher import record_outcome
-
-        record_outcome(mf.name, code,
-                       round((time.perf_counter() - started) * 1000),
-                       slots.keys(), lines[-1] if lines else {})
     return _text_result("\n".join(json.dumps(l, ensure_ascii=False) for l in lines),
                         is_error=code != 0)
 
