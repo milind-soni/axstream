@@ -228,6 +228,12 @@ async def swipe(computer: DriverComputer, direction: str,
 
 # --- hands: raw global-HID events, NOT the driver ---
 #
+# VERIFIED 2026-08-09 on the iOS Simulator: tap_text navigated Settings
+# (General -> About) via _hid_tap; chords post without error. Typing uses the
+# identical CGEventPost(kCGHIDEventTap) channel (proven for taps here and for
+# text in the phone-harness project). Live typing demo pending a real device /
+# a reliably-focused field.
+#
 # MEASURED (2026-08-09, iOS Simulator + iPhone Mirroring): the driver's
 # synthesized input reaches these video-stream windows at NO scope — not
 # pid-addressed background, not foreground-assisted, not scope="desktop".
