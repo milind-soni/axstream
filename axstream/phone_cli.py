@@ -18,7 +18,7 @@ import sys
 
 from .driver import DriverComputer
 from . import phone as _phone
-from . import settle as _settle
+from . import check as _settle
 
 USAGE = """Usage:
   axstream phone --doctor        preflight the iPhone Mirroring session

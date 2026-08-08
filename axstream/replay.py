@@ -59,7 +59,7 @@ from typing import Callable, Optional
 from . import ocr
 from . import patch as patchmod
 from .ax import resolve_window_element
-from .conditions import ConditionTimeout, wait_for_target
+from .check import ConditionTimeout, wait_for_target
 from .driver import window_pixels_from_screen
 from .geometry import GeometryMismatch, annotate_window_relative, remap_offset
 from .macrofile import (
