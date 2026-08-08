@@ -1,40 +1,49 @@
 # axstream
 
-**A streaming action language for computer-use agents.** An LLM emits actions
-as JSONL — one JSON object per line — and the executor performs each action
-the moment its newline arrives, while the model is still generating. The
-newline is the commit signal: a half-generated action can never fire.
+**Fast, verified computer use that compiles.** Your coding agent does a macOS
+UI task once; axstream saves it as a small text macro that replays in seconds
+— no screenshots, no per-step reasoning, and never trusted until it proves its
+own outcome. The first run is agent-speed; every run after is ~100ms per
+action, verified, or an honest refusal.
 
-**→ [Read the spec: SPEC.md](SPEC.md)** (axstream-spec 0.1) · **→ [Docs: axstream.dev](https://axstream.dev)**
+**→ [Docs](https://axstream.dev)** · **→ [The spec](SPEC.md)** · macOS
 
-```spec
-{"op":"act","do":"open","target":"Notes"}
-{"op":"act","do":"wait","ms":500}
-{"op":"act","do":"type","text":"remember to buy milk"}
-{"op":"done","status":"success"}
+## In four commands
+
+```sh
+uv tool install axstream          # or: pip install axstream
+axstream install                  # wire the skill + MCP into Claude Code / Codex
+axstream --doctor                 # check the driver + permissions
+axstream replay <macro>           # a saved task, in seconds
 ```
 
-## Why
+The one prerequisite is the [cua-driver](https://github.com/trycua/cua)
+daemon (`--doctor` tells you how). Then your agent gets the flywheel: **do a
+task once → it's saved → it replays instantly, forever.**
 
-Today's computer-use loops wait for the full model response, act once,
-screenshot, and re-prompt — every step pays full decode plus observation.
-axstream reads the **accessibility tree** (text, ~150ms scoped) instead of
-pixels, overlaps execution with decode, and only re-observes at explicit
-`observe` barriers. A burst of N actions costs ~max(decode, execution) instead
-of N × (decode + observe).
+```
+{"name":"new-note","description":"a titled Apple Note","slots":{"title":{"example":"standup"}}}
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"key","keys":["cmd","n"]}
+{"op":"act","do":"type","text":"{title}"}
+{"op":"assert","target":{"text":"{title}"}}
+```
 
-Measured on the reference implementation: streaming execution saves **37%
-wall-clock** vs wait-then-act; a full plan from a fast LLM lands in **~0.4s**;
-a learned command replays in **~100ms with no LLM** at **94% end-to-end
-accuracy** ([open fine-tuned 350M matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher), held-out eval).
+## Why it's fast — and why it's trusted
 
-## Three speeds, one language
+A coding agent drives a Mac the expensive way: screenshot → reason → one click
+→ screenshot again, seconds and tokens per step. axstream replaces the repeat
+of any task with a deterministic macro: clicks resolve through a **verified
+ladder** (accessibility element → OCR text anchor → visual patch → window-
+relative pixels) and every macro ends with an **assert** that only passes when
+the task actually happened. A macro that can't prove its outcome never earns
+the `verified` stamp — following
+[PreAct](https://arxiv.org/abs/2606.17929), whose result is that cached-replay
+systems collapse without exactly this gate.
 
-- **Instant** — commands you've used before replay directly (frecency-ranked,
-  slot-parameterized, guarded against the live screen). No LLM.
-- **Fast** — novel commands streamed by an LLM over the AX tree. Every success
-  is captured into the instant tier.
-- **Fallback** — AX-dead apps via computer use.
+Measured against a coding agent's native computer use on the same repeat
+tasks: **34–78× faster** at the execution layer, deterministic at p95,
+verified-or-refused every time.
 
 ## Install
 
@@ -56,7 +65,6 @@ npx skills add milind-soni/axstream
 ```sh
 uv tool install axstream          # from PyPI — or: pip install axstream
 axstream install                  # wire the skill + MCP into Claude Code / Codex
-axstream menu                     # launch AxstreamBar — hold ⌃⌥ and speak
 ```
 
 One prerequisite for live execution either way: the cua-driver daemon
@@ -68,52 +76,14 @@ After install, your agent gets `/axstream` (status), `/axstream-teach`
 primitives (screen-as-text, batched verified actions), and the macro
 flywheel.
 
-`axstream menu` launches **AxstreamBar** (`swift/AxstreamBar`, a native Swift
-app): hold **⌃⌥**, speak, release — local whisper (large-v3-turbo) hears
-you, an embedding shortlist plus the fine-tuned matcher pick the workflow
-(~140ms combined), and the verified replay runs while a bottom-of-screen HUD
-narrates every step. Slots fill from your words (*"add a torus in blender"*),
-compound commands chain (*"open blender and select the shape and delete the
-shape"*), and anything unknown is constructed once by the LLM tier, executed,
-then saved back into the library with its variables identified — slow at
-most once. The dropdown shows verified/draft trust marks with recent
-workflows on top. Run history stores only macro names, timing, and outcomes —
-never slot values. Build + model download:
-[axstream.dev/docs/voice](https://axstream.dev/docs/voice).
-
-## Run it
+## Run it (from a clone, for hacking)
 
 ```sh
-
-# or for hacking on it:
 git clone https://github.com/milind-soni/axstream && cd axstream && uv sync
-
-# dry demo — no keys, no server; proves the streaming overlap
-uv run python demo_dry.py
-
-# set up the local pieces once (full walkthrough: axstream.dev/docs/quickstart)
-brew install llama.cpp
-curl -L -o ~/models/lfm25-350m-axstream-Q4_K_M.gguf \
-  "https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher/resolve/main/lfm25-350m-axstream-Q4_K_M.gguf"
-llama-server -m ~/models/lfm25-350m-axstream-Q4_K_M.gguf --port 8791 -ngl 99 -c 4096 --no-webui
-/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"   # executor (grant Accessibility)
-
-# start everything with defaults and listen (auto-starts the matcher if down)
-uv run axstream up                # type commands
-uv run axstream up --voice        # speak them (uv sync --extra voice)
-
-# or piece by piece
 uv run axstream --doctor
-uv run axstream "launch safari"
-
-# tests
-uv run pytest tests
+uv run axstream replay <macro> --slots '{"...":"..."}'
+uv run pytest tests            # 119 tests
 ```
-
-The command above downloads the open
-[axstream-matcher](https://huggingface.co/milsoni201/lfm25-350m-axstream-matcher)
-(94% e2e vs the base model's 47%; misses fall back to the LLM tier).
-`AXSTREAM_TINY_URL` overrides the matcher endpoint.
 
 ## File macros: agents author, axstream replays
 
@@ -187,28 +157,6 @@ on failure, read `failed_at` and take over (or fix the macro) from that exact
 op. Format details in `axstream/macrofile.py`; replay semantics in
 `axstream/replay.py`.
 
-## Integrate your STT
-
-You own audio → text; axstream owns text → action. Send the final utterance,
-get an executed action or a fast explicit refusal to route to your fallback:
-
-```python
-from axstream import Session
-
-session = await Session().connect()
-result = await session.handle("launch safari")
-# {"tier": "instant", "template": "open_app", "slots": {"app": "safari"}, "status": "done", ...}
-```
-
-Or as a pipe (no Python on your side): `your-stt | python -m axstream --stdin`.
-Verify setup with `python -m axstream --doctor`. Full contract:
-[axstream.dev/docs/integrate](https://axstream.dev/docs/integrate).
-
-axstream does **not** bundle its executor or model server — they're pluggable
-local processes (cua-driver / computer-server / your own `Computer`-shaped
-backend; any OpenAI-compatible server for the matcher). `--doctor` tells you
-what's missing and how to install it.
-
 ## Spec properties
 
 - **Line = commit unit.** Truncation-safe by construction.
@@ -268,29 +216,22 @@ SPEC.md              the canonical action language (CC BY 4.0)
 axstream/
   compiler.py        newline-committed stream compiler
   executor.py        pipelined executor + zoxide-tier replay
-  ax.py              AX-tree observation, terse summaries, fuzzy resolve
-  computer.py        computer-server WebSocket client (+ MockComputer)
+  macrofile.py       the .axstream format: header + spec JSONL, slots
+  spec.py            op catalog + validate_op
   driver.py          cua-driver backend (background, pid-addressed delivery)
-  geometry.py        window-relative click remapping (moves + resizes)
-  ocr.py             Apple Vision text anchors / assertions ([ocr] extra)
-  conditions.py      adaptive wait_until + terminal-assert polling
-  codex_capture.py   compile captured Codex native `sky` traces into macros
-  codex_bridge.mjs   recording facade for Codex native computer use
+  replay.py          run_actions + the CLI (replay / list / bench)
+  ocr.py             Apple Vision text anchors + assertions
   patch.py           visual patch anchors for icon-only controls ([patch] extra)
+  geometry.py        window-relative click remapping (moves + resizes)
+  check.py           verify + wait: asserts, wait_until, stability, scroll
   gate.py            verify-before-store gate + task-family dedup
-  macros.py          frecency-ranked parameterized macro store
-  macrofile.py       file-based macros (.axstream): header + spec JSONL
-  replay.py          replay / list / bench — the agent-facing CLI
-  launcher.py        workflow catalog, frecency, private history, replay service
-  mcp.py             MCP server: accelerator primitives + macro tools
+  ledger.py          run receipts -> `axstream stats`
+  ax.py              AX-tree observation + fuzzy element resolve
+  mcp.py             MCP server (protocol + dispatch); mcp_tools.py = schemas
+  codex_capture.py   compile captured Codex native `sky` traces into macros
+  phone.py           iPhone Mirroring backend (OCR eyes, driver hands)
   install.py         `axstream install` — skill + MCP wiring for agents
   skills/            the packaged Claude Code / Codex skill
-  tiny.py            local tiny-model matcher (schema-constrained)
-  capture.py         parameterize a successful run into a macro
-  llm.py / prompt.py / runner.py / spec.py
-demo_dry.py          no-keys streaming-overlap demo
-swift/AxstreamBar/   the native voice menu bar app (hold ⌃⌥, speak, release)
-docs/                axstream.dev (Fumadocs)
 ```
 
 ## License

@@ -3,6 +3,7 @@
   axstream replay <name|path>     replay a file macro (--slots, --dry, --learn)
   axstream list [--json]          macros with verified state
   axstream verify <name>          the verify-before-trust gate
+  axstream stats                  time saved, made visible
   axstream bench <name>           p50/p95 per op across runs
   axstream mcp                    the MCP server (agents)
   axstream install                wire skill + MCP into Claude Code / Codex
