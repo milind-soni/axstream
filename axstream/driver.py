@@ -24,21 +24,14 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 DRIVER_BIN = os.path.expanduser("~/.local/bin/cua-driver")
-def _default_socket() -> str:
-    """Socket discovery order: explicit env override -> an axstream-dedicated
-    daemon (a locally patched driver, e.g. running the observe_window_changes
-    fast path before it ships upstream) -> the standard cua-driver daemon."""
-    env = os.environ.get("AXSTREAM_DRIVER_SOCK")
-    if env:
-        return env
-    dedicated = os.path.expanduser(
-        "~/Library/Caches/cua-driver/axstream-driver.sock")
-    if os.path.exists(dedicated):
-        return dedicated
-    return os.path.expanduser("~/Library/Caches/cua-driver/cua-driver.sock")
-
-
-DRIVER_SOCK = _default_socket()
+# The official cua-driver socket. A locally-patched fast-path daemon (the
+# observe_window_changes speedup, before it ships upstream) is opt-in ONLY
+# via AXSTREAM_DRIVER_SOCK — auto-discovering it by filename caused repeated
+# TCC prompts, because each rebuild is a new binary identity with no grant.
+# Default to the driver the user actually granted.
+DRIVER_SOCK = os.environ.get(
+    "AXSTREAM_DRIVER_SOCK",
+    os.path.expanduser("~/Library/Caches/cua-driver/cua-driver.sock"))
 
 # windows owned by these never count as "the frontmost app"
 _OVERLAY_APPS = {"Cua Driver", "CursorUIViewService", "Window Server", ""}
