@@ -5,7 +5,7 @@ pixel -> failure)."""
 import asyncio
 import json
 
-from axstream.computer import MockComputer
+from mock_computer import MockComputer
 from axstream.driver import DriverComputer, _usable_window, window_pixels_from_screen
 from axstream.macrofile import parse
 from axstream.replay import cmd_list, cmd_replay, run_actions

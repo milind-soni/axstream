@@ -40,7 +40,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from .macros import Macro, _fill
 from .spec import validate_op
 
 MACRO_SUFFIX = ".axstream"
@@ -100,7 +99,20 @@ class MacroFile:
                 f"missing slot value(s): {', '.join(missing)} "
                 f"(pass --slots '{json.dumps({m: '...' for m in missing})}')"
             )
-        return _fill(self.actions, {k: str(v) for k, v in values.items()})
+        strvals = {k: str(v) for k, v in values.items()}
+
+        def fill_value(v):
+            if isinstance(v, str):
+                for name, val in strvals.items():
+                    v = v.replace("{" + name + "}", val)
+                return v
+            if isinstance(v, dict):
+                return {k: fill_value(x) for k, x in v.items()}
+            if isinstance(v, list):
+                return [fill_value(x) for x in v]
+            return v
+
+        return [fill_value(dict(op)) for op in self.actions]
 
 
 # -- parse / serialize ----------------------------------------------------
@@ -273,30 +285,3 @@ def resolve_name(name_or_path: str, dirs: Optional[list[Path]] = None) -> Option
         if isinstance(mf, MacroFile) and mf.name == name_or_path:
             return path
     return None
-
-
-# -- frecency-store bridge -------------------------------------------------
-# The JSON macro store (macros.MacroStore) stays as-is: it is the matcher's
-# ranked index for the voice tier. These converters let file macros be seeded
-# into it (and captured macros exported to files) without either side changing.
-
-
-def to_macro(mf: MacroFile) -> Macro:
-    return Macro(
-        id=re.sub(r"[^a-z0-9_]+", "_", mf.name.lower()).strip("_") or "unnamed",
-        description=mf.description or mf.when_to_use or mf.name,
-        slots=sorted(mf.used_slots() & set(mf.slots)) or sorted(mf.slots),
-        examples=mf.examples,
-        actions=mf.actions,
-    )
-
-
-def from_macro(m: Macro, provenance: Optional[dict] = None) -> MacroFile:
-    return MacroFile(
-        name=m.id,
-        actions=m.actions,
-        description=m.description,
-        slots={s: {} for s in m.slots},
-        examples=m.examples,
-        provenance=provenance or {"source": "llm-run"},
-    )
