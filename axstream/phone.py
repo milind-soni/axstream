@@ -21,12 +21,21 @@ poll for reconnection.
 from __future__ import annotations
 
 import asyncio
+import time as _time
 from typing import Optional
 
-from .driver import DriverComputer, WindowSnapshot
+from .driver import DriverComputer, DriverError, WindowSnapshot
 from . import ocr as _ocr
 
 APP_NAME = "iPhone Mirroring"
+
+# A ready verdict stays trusted this long. Without it every phone step pays
+# the full preflight — two list_windows round-trips, a fresh screenshot, a
+# whole-window OCR pass, and a fixed 0.25s post-fronting settle — which
+# dominates an otherwise instant tap. Within the TTL the window's existence
+# and bounds are still re-read live (cheap); only the screenshot+OCR
+# interstitial scan and the re-fronting are skipped.
+_READY_TTL_S = 2.0
 
 # Distinctive strings on the not-connected interstitials. Any of these visible
 # means a human has to act; the agent must stop and say so.
@@ -67,38 +76,81 @@ _STATE_MESSAGES = {
 
 async def state(computer: DriverComputer) -> dict:
     """{'state': 'ready'|'blocked'|'no-window'|'not-running',
-        'snapshot': WindowSnapshot|None, 'instructions': str|None}
+        'snapshot': WindowSnapshot|None, 'instructions': str|None,
+        'ocr_available': bool}
 
     Cheap preflight — call before acting, relay `instructions` on non-ready.
+    `ocr_available` False means the blocked-interstitial scan is blind (no
+    pyobjc): the session may look ready while showing a Connect screen.
     """
     windows = await _mirror_windows(computer)
     if windows is None:
         return {"state": "not-running", "snapshot": None,
-                "instructions": _STATE_MESSAGES["not-running"]}
+                "instructions": _STATE_MESSAGES["not-running"],
+                "ocr_available": _ocr.available()}
     if not windows:
         return {"state": "no-window", "snapshot": None,
-                "instructions": _STATE_MESSAGES["no-window"]}
-    snap = await _target_mirror(computer, fresh_shot=True)
+                "instructions": _STATE_MESSAGES["no-window"],
+                "ocr_available": _ocr.available()}
+    snap = await _target_mirror(computer, fresh_shot=True, windows=windows)
     if snap is None:
         return {"state": "no-window", "snapshot": None,
-                "instructions": _STATE_MESSAGES["no-window"]}
-    if snap.shot_path:
+                "instructions": _STATE_MESSAGES["no-window"],
+                "ocr_available": _ocr.available()}
+    if snap.shot_path and _ocr.available():
         texts = " ".join(h.text for h in _ocr.all_text(snap.shot_path)).lower()
         if any(marker in texts for marker in _BLOCKED_MARKERS):
             return {"state": "blocked", "snapshot": snap,
-                    "instructions": _STATE_MESSAGES["blocked"]}
-    return {"state": "ready", "snapshot": snap, "instructions": None}
+                    "instructions": _STATE_MESSAGES["blocked"],
+                    "ocr_available": True}
+    return {"state": "ready", "snapshot": snap, "instructions": None,
+            "ocr_available": _ocr.available()}
+
+
+async def _front(computer: DriverComputer, pid: int) -> None:
+    """Front the mirror window — but only when it isn't already frontmost.
+    The 0.25s settle after bring_to_front is the per-step cost worth
+    avoiding; frontmost() is one ~5ms list_windows call."""
+    front_pid, _ = await computer.frontmost()
+    if front_pid == pid:
+        return
+    try:
+        await computer.tool("bring_to_front", pid=pid)
+    except DriverError as e:
+        raise PhoneNotReady(
+            "no-window",
+            f"could not front the iPhone Mirroring window ({e}). Ask the "
+            "user to click the iPhone Mirroring window — if it's gone, "
+            "reconnect the phone in the app.") from e
+    await asyncio.sleep(0.25)
 
 
 async def ensure_ready(computer: DriverComputer) -> WindowSnapshot:
     """Preflight + front the mirror (it swallows non-frontmost input).
     Returns the window snapshot, or raises PhoneNotReady with relayable
-    instructions. Never launches the app or taps through interstitials."""
+    instructions. Never launches the app or taps through interstitials.
+
+    A ready verdict is cached for _READY_TTL_S on the computer instance:
+    the fast path re-reads the window live (existence + bounds) but skips
+    the screenshot+OCR interstitial scan and the re-fronting settle."""
+    cached = getattr(computer, "_phone_ready", None)
+    if cached is not None and _time.monotonic() - cached[0] < _READY_TTL_S:
+        pid = cached[1]
+        computer.target_pid = pid
+        await _front(computer, pid)
+        # the base implementation, even on a PhoneComputer — its override
+        # routes straight back here
+        snap = await DriverComputer.window_geometry(computer)
+        if snap is not None:
+            return snap
+        # the window vanished mid-TTL — fall through to the full preflight
     s = await state(computer)
     if s["state"] != "ready":
-        raise PhoneNotReady(s["state"], s["instructions"])
-    await computer.tool("bring_to_front", pid=s["snapshot"].pid)
-    await asyncio.sleep(0.25)
+        computer._phone_ready = None
+        raise PhoneNotReady(s["state"], s["instructions"] or s["state"])
+    pid = s["snapshot"].pid
+    await _front(computer, pid)
+    computer._phone_ready = (_time.monotonic(), pid)
     return s["snapshot"]
 
 
@@ -128,9 +180,13 @@ async def _mirror_windows(computer: DriverComputer) -> Optional[list]:
 
 
 async def _target_mirror(computer: DriverComputer,
-                         fresh_shot: bool = False) -> Optional[WindowSnapshot]:
-    """Point the computer at the mirror app and return its window snapshot."""
-    windows = await _mirror_windows(computer)
+                         fresh_shot: bool = False,
+                         windows: Optional[list] = None) -> Optional[WindowSnapshot]:
+    """Point the computer at the mirror app and return its window snapshot.
+    `windows` lets a caller that already listed them (state) skip a second
+    list_windows round-trip."""
+    if windows is None:
+        windows = await _mirror_windows(computer)
     if not windows:
         return None
     pid = next((int(w["pid"]) for w in windows if w.get("pid")), None)
@@ -377,3 +433,84 @@ async def open_app(computer: DriverComputer, name: str) -> None:
     await type_text(computer, name)
     await asyncio.sleep(1.2)  # let results populate before committing
     _hid_key(["return"])
+
+
+# --- PhoneComputer: the replay adapter ---
+#
+# A macro with a `"device": "phone"` header replays through this instead of a
+# bare DriverComputer. It keeps the driver for EYES (window discovery, OCR
+# capture via window_geometry) but overrides every HANDS method with raw
+# global-HID delivery — the only channel the mirror window accepts. The
+# replay engine, the verify gate, slots, and asserts all work unchanged: the
+# existing click ladder's OCR rung calls click_window_pixel, which here
+# converts the screenshot-pixel hit to a screen point and taps via CGEvent.
+
+class PhoneComputer(DriverComputer):
+    """DriverComputer with phone hands: eyes via the driver, input via raw HID.
+
+    The AX-element click rung finds nothing (a mirror window has no AX tree),
+    so clicks fall to the OCR anchor rung — which resolves through
+    click_window_pixel below and lands a real touch."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._geom: Optional[WindowSnapshot] = None
+
+    async def window_snapshot(self, with_screenshot: bool = False):
+        # Target + front the mirror before any observation.
+        snap = await ensure_ready(self)
+        self.target_pid = snap.pid
+        got = await super().window_snapshot(with_screenshot=with_screenshot)
+        if got is not None:
+            self._geom = got
+        return got
+
+    async def window_geometry(self, fresh_shot: bool = False):
+        snap = await ensure_ready(self)
+        self.target_pid = snap.pid
+        got = await super().window_geometry(fresh_shot=fresh_shot)
+        if got is not None:
+            self._geom = got
+        return got
+
+    def _to_screen(self, px: float, py: float) -> tuple:
+        if self._geom is None:
+            raise RuntimeError("no phone geometry yet — snapshot first")
+        return _screen_point(self._geom, px, py)
+
+    async def click_window_pixel(self, pid, window_id, x, y):
+        _hid_tap(*self._to_screen(x, y))
+        return {"path": "hid", "effect": "unverifiable"}
+
+    async def double_click_window_pixel(self, pid, window_id, x, y):
+        sx, sy = self._to_screen(x, y)
+        _hid_tap(sx, sy); await asyncio.sleep(0.12); _hid_tap(sx, sy)
+        return {"path": "hid", "effect": "unverifiable"}
+
+    right_click_window_pixel = click_window_pixel  # iOS has no right-click
+
+    async def type_text(self, text: str) -> None:
+        await type_text(self, text)
+
+    async def key(self, keys: list) -> None:
+        _hid_key(list(keys))
+
+    async def scroll(self, direction: str, clicks: int = 3) -> None:
+        await swipe(self, direction, distance=min(0.8, 0.2 * max(1, clicks)))
+
+    async def open(self, target: str) -> None:
+        await open_app(self, target)
+
+    async def move(self, x: float, y: float) -> None:
+        pass  # no overlay cursor on a phone
+
+    async def drag(self, frm: dict, to: dict) -> dict:
+        snap = self._geom or await self.window_geometry(fresh_shot=True)
+        sw, sh = snap.screenshot_size or (0, 0)
+
+        def pt(d):
+            w = (d.get("win") or {})
+            return _screen_point(snap, w.get("fx", 0) * sw, w.get("fy", 0) * sh)
+        (x1, y1), (x2, y2) = pt(frm), pt(to)
+        _hid_drag(x1, y1, x2, y2, dur=0.12, steps=6)
+        return {"path": "hid", "effect": "unverifiable"}

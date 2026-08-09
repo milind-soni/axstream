@@ -10,8 +10,10 @@ Two families, one concern (confirming reality before trusting it):
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import time
+from pathlib import Path
 
 from . import ocr
 from typing import Callable, Optional
@@ -96,7 +98,7 @@ ContentFilter = Callable[[WindowSnapshot], list]
 def _default_content(snap: WindowSnapshot) -> list:
     if not snap.shot_path:
         return []
-    return _ocr.all_text(snap.shot_path)
+    return ocr.all_text(snap.shot_path)
 
 
 def _text_set(hits: list) -> frozenset:

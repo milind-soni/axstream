@@ -75,7 +75,7 @@ def test_verify_stamps_on_success(tmp_path, monkeypatch):
     p.write_text("\n".join([json.dumps({"name": "ok", **header})]
                            + [json.dumps(op) for op in BASE]) + "\n")
 
-    async def fake_replay(actions, emit, delivery=None):
+    async def fake_replay(actions, emit, mf=None, delivery=None):
         emit({"ok": True, "completed": len(actions), "total": len(actions),
               "unverified_steps": [1]})
         return 0
@@ -98,7 +98,7 @@ def test_verify_fails_on_replay_failure(tmp_path, monkeypatch):
                                         "slots": {"query": {"example": "x"}}})]
                            + [json.dumps(op) for op in BASE]) + "\n")
 
-    async def fake_replay(actions, emit, delivery=None):
+    async def fake_replay(actions, emit, mf=None, delivery=None):
         emit({"failed_at": 4, "op": actions[4], "reason": "assert failed",
               "completed": 4})
         return 1
@@ -126,7 +126,7 @@ def test_captured_macro_verification_requires_fresh_slot_value(tmp_path, monkeyp
                              + [json.dumps(op) for op in BASE]) + "\n")
     called = {"replay": False}
 
-    async def fake_replay(actions, emit, delivery=None):
+    async def fake_replay(actions, emit, mf=None, delivery=None):
         called["replay"] = True
         emit({"ok": True, "completed": len(actions), "total": len(actions)})
         return 0
@@ -163,3 +163,44 @@ def test_signature_distinguishes_literal_typed_text():
     assert gate.signature(mf_of(BASE)) != gate.signature(mf_of(nav))
     # but two instances of the same slotted task still collide (upsert works)
     assert gate.signature(mf_of(BASE)) == gate.signature(mf_of(BASE, name="twin"))
+
+
+# -- the live gate replay path ----------------------------------------------
+
+class _FakeComputer:
+    delivery = None
+
+    async def connect(self):
+        pass
+
+    async def close(self):
+        pass
+
+    async def fast_cursor(self):
+        pass
+
+
+def test_verify_replays_through_the_gate_and_stamps(tmp_path, monkeypatch):
+    """Regression: _replay_once must build its executor from the macro (it
+    once referenced an out-of-scope `mf` and crashed every verify)."""
+    import axstream.replay as replay_mod
+
+    monkeypatch.setattr(gate, "computer_for", lambda mf: _FakeComputer())
+
+    async def fake_run_actions(actions, computer, emit, **kw):
+        for i, op in enumerate(actions):
+            emit({"i": i, "op": op, "ok": True})
+        emit({"ok": True, "completed": len(actions), "total": len(actions)})
+        return 0
+
+    monkeypatch.setattr(replay_mod, "run_actions", fake_run_actions)
+
+    macro = tmp_path / "m.axstream"
+    macro.write_text("\n".join([
+        json.dumps({"name": "m", "description": "d"}),
+        json.dumps({"op": "act", "do": "wait", "ms": 1}),
+        json.dumps({"op": "assert", "target": {"text": "Done"}}),
+    ]) + "\n")
+    result = gate.verify(str(macro))
+    assert result["ok"] is True
+    assert '"verified"' in macro.read_text()  # stamped into the file

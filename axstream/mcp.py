@@ -43,12 +43,13 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-import time
 from pathlib import Path
+from typing import Optional
 
 from .macrofile import (
     MacroFile,
     MacroFileError,
+    computer_for,
     discover,
     load,
     macro_dirs,
@@ -131,7 +132,7 @@ def _tool_replay(args: dict) -> dict:
         from .replay import run_actions
 
         async def go() -> int:
-            computer = DriverComputer()
+            computer = computer_for(mf)
             if mf.extra.get("delivery") == "foreground": computer.delivery = "foreground"
             await computer.connect()
             await computer.fast_cursor()
@@ -140,7 +141,6 @@ def _tool_replay(args: dict) -> dict:
             finally:
                 await computer.close()
 
-        started = time.perf_counter()
         code = asyncio.run(go())
     return _text_result("\n".join(json.dumps(l, ensure_ascii=False) for l in lines),
                         is_error=code != 0)
@@ -227,47 +227,36 @@ def _tool_verify(args: dict) -> dict:
     return _text_result("\n".join(lines), is_error=not result.get("ok"))
 
 
-async def _targeted_computer(app: str | None):
-    """A connected DriverComputer, pinned to `app`'s window when given."""
-    from .driver import DriverComputer
-
-    c = DriverComputer()
-    await c.connect()
-    if app:
-        wins = (await c.tool("list_windows")).get("windows", [])
-        from .driver import _usable_window
-
-        mine = [w for w in wins
-                if (w.get("app_name") or "").lower() == app.lower()
-                and _usable_window(w)]
-        if not mine:
-            await c.close()
-            raise ValueError(f"no window found for app {app!r}")
-        c.target_pid = mine[0]["pid"]
-    return c
-
-
-def _tool_screen_text(args: dict) -> dict:
+def _ocr_unavailable() -> Optional[dict]:
     from . import ocr
 
     if not ocr.available():
         return _text_result("OCR unavailable — pip install axstream",
                             is_error=True)
+    return None
+
+
+def _tool_screen_text(args: dict) -> dict:
+    if (unavailable := _ocr_unavailable()) is not None:
+        return unavailable
+    from .see import SeeError, targeted_computer, window_view
 
     async def go() -> dict:
-        c = await _targeted_computer(args.get("app"))
         try:
-            g = await c.window_geometry(fresh_shot=True)
-            if g is None or not g.fresh_shot or not g.shot_path:
-                return _text_result("could not capture the target window",
-                                    is_error=True)
-            lines = ocr.all_text(g.shot_path)
-            head = {"window": g.title, "pid": g.pid,
-                    "screenshot_px": list(g.screenshot_size or ()),
-                    "lines": len(lines)}
+            c = await targeted_computer(args.get("app"))
+        except SeeError as e:
+            return _text_result(str(e), is_error=True)
+        try:
+            try:
+                view = await window_view(c)
+            except SeeError as e:
+                return _text_result(str(e), is_error=True)
+            head = {"window": view.title, "pid": view.pid,
+                    "screenshot_px": list(view.screenshot_size or ()),
+                    "lines": len(view.hits)}
             body = [{"text": h.text, "x": round(h.x), "y": round(h.y)}
-                    for h in lines[:400]]
-            if len(lines) > 400:
+                    for h in view.hits[:400]]
+            if len(view.hits) > 400:
                 head["truncated_to"] = 400
             out = [json.dumps(head, ensure_ascii=False)]
             out += [json.dumps(b, ensure_ascii=False) for b in body]
@@ -284,17 +273,20 @@ def _tool_find(args: dict) -> dict:
     query = (args.get("text") or "").strip()
     if not query:
         return _text_result("text is required", is_error=True)
-    if not ocr.available():
-        return _text_result("OCR unavailable — pip install axstream",
-                            is_error=True)
+    if (unavailable := _ocr_unavailable()) is not None:
+        return unavailable
+    from .see import SeeError, capture, targeted_computer
 
     async def go() -> dict:
-        c = await _targeted_computer(args.get("app"))
         try:
-            g = await c.window_geometry(fresh_shot=True)
-            if g is None or not g.fresh_shot or not g.shot_path:
-                return _text_result("could not capture the target window",
-                                    is_error=True)
+            c = await targeted_computer(args.get("app"))
+        except SeeError as e:
+            return _text_result(str(e), is_error=True)
+        try:
+            try:
+                g = await capture(c)
+            except SeeError as e:
+                return _text_result(str(e), is_error=True)
             hit = ocr.find_text(g.shot_path, query)
             if hit is None:
                 return _text_result(json.dumps(
@@ -321,24 +313,29 @@ def _tool_check(args: dict) -> dict:
     query = (args.get("text") or "").strip()
     if not query:
         return _text_result("text is required", is_error=True)
-    if not ocr.available():
-        return _text_result("OCR unavailable — pip install axstream",
-                            is_error=True)
+    if (unavailable := _ocr_unavailable()) is not None:
+        return unavailable
+    from .see import SeeError, capture, targeted_computer
 
     async def go() -> dict:
-        c = await _targeted_computer(args.get("app"))
+        try:
+            c = await targeted_computer(args.get("app"))
+        except SeeError as e:
+            return _text_result(str(e), is_error=True)
         try:
             hit = None
             window = None
             for delay in (0.0, 0.4, 0.8, 1.2):
                 if delay:
                     await asyncio.sleep(delay)
-                g = await c.window_geometry(fresh_shot=True)
-                if g is not None and g.fresh_shot and g.shot_path:
-                    window = g.title
-                    hit = ocr.find_text(g.shot_path, query)
-                    if hit is not None:
-                        break
+                try:
+                    g = await capture(c)
+                except SeeError:
+                    continue
+                window = g.title
+                hit = ocr.find_text(g.shot_path, query)
+                if hit is not None:
+                    break
             return _text_result(json.dumps(
                 {"visible": hit is not None, "window": window,
                  **({"matched": hit.text} if hit else {})}, ensure_ascii=False))

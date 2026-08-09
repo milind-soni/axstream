@@ -57,7 +57,7 @@ def main() -> None:
         from .install import cmd_install
         sys.exit(cmd_install(argv[1:]))
     if argv and argv[0] == "bench":
-        from .replay import cmd_bench
+        from .bench import cmd_bench
         sys.exit(cmd_bench(argv[1:]))
     if argv and argv[0] == "phone":
         from .phone_cli import cmd_phone

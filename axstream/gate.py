@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from .macrofile import MacroFile, discover, dumps, load, save
+from .macrofile import MacroFile, computer_for, discover, dumps, load, save
 from .spec import risk_of
 
 USER_DIR = Path("~/.axstream/macros").expanduser()
@@ -143,11 +143,12 @@ def verification(mf: MacroFile) -> dict:
 # -- the live gate ---------------------------------------------------------
 
 
-async def _replay_once(actions: list[dict], emit, delivery=None) -> int:
-    from .driver import DriverComputer
+async def _replay_once(actions: list[dict], emit, mf=None, delivery=None) -> int:
     from .replay import run_actions
 
-    computer = DriverComputer()
+    # computer_for picks the executor off the macro header (device:"phone"
+    # gets the raw-HID PhoneComputer; anything else the standard driver)
+    computer = computer_for(mf)
     computer.delivery = delivery
     await computer.connect()
     await computer.fast_cursor()
@@ -223,7 +224,7 @@ def verify(name_or_path: str, slots: Optional[dict] = None,
         emit(line)
 
     delivery = mf.extra.get("delivery")
-    code = asyncio.run(_replay_once(actions, collect, delivery=delivery))
+    code = asyncio.run(_replay_once(actions, collect, mf=mf, delivery=delivery))
     escalated = False
     if code != 0 and delivery is None:
         # Delivery auto-discovery: Blender-class OpenGL/custom-event-loop apps
@@ -232,7 +233,8 @@ def verify(name_or_path: str, slots: Optional[dict] = None,
         # so retry once with escalated foreground delivery; if that passes,
         # the macro learns its delivery mode permanently.
         lines.clear()
-        code = asyncio.run(_replay_once(actions, collect, delivery="foreground"))
+        code = asyncio.run(_replay_once(actions, collect, mf=mf,
+                                        delivery="foreground"))
         escalated = code == 0
     if code != 0:
         last = lines[-1] if lines else {}

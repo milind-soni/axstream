@@ -63,6 +63,9 @@ async def _doctor() -> int:
     print(f"{icon} iPhone Mirroring: {s['state']}")
     if s["instructions"]:
         print(f"  → {s['instructions']}")
+    if not s.get("ocr_available", True):
+        print("  ⚠ OCR unavailable (pip install axstream) — the blocked-"
+              "interstitial scan is blind; 'ready' may hide a Connect screen")
     if s["state"] == "ready":
         snap = s["snapshot"]
         print(f"  window {snap.bounds.get('width')}x{snap.bounds.get('height')} "

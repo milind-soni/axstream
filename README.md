@@ -82,7 +82,7 @@ flywheel.
 git clone https://github.com/milind-soni/axstream && cd axstream && uv sync
 uv run axstream --doctor
 uv run axstream replay <macro> --slots '{"...":"..."}'
-uv run pytest tests            # 119 tests
+uv run pytest tests            # 133 tests
 ```
 
 ## File macros: agents author, axstream replays
@@ -214,24 +214,26 @@ avoiding the fixed sleeps that often dominate an otherwise instant replay.
 ```
 SPEC.md              the canonical action language (CC BY 4.0)
 axstream/
-  compiler.py        newline-committed stream compiler
-  executor.py        pipelined executor + zoxide-tier replay
   macrofile.py       the .axstream format: header + spec JSONL, slots
   spec.py            op catalog + validate_op
   driver.py          cua-driver backend (background, pid-addressed delivery)
-  replay.py          run_actions + the CLI (replay / list / bench)
+  replay.py          run_actions + the replay / list CLI
+  act.py             the click resolution ladder (AX -> OCR -> patch -> pixel)
+  bench.py           `axstream bench` — p50/p95 per op across runs
+  see.py             window-as-text perception behind the MCP see tools
   ocr.py             Apple Vision text anchors + assertions
   patch.py           visual patch anchors for icon-only controls ([patch] extra)
   geometry.py        window-relative click remapping (moves + resizes)
   check.py           verify + wait: asserts, wait_until, stability, scroll
   gate.py            verify-before-store gate + task-family dedup
   ledger.py          run receipts -> `axstream stats`
-  ax.py              AX-tree observation + fuzzy element resolve
+  ax.py              AX-tree observation + fuzzy element/app-name resolve
   mcp.py             MCP server (protocol + dispatch); mcp_tools.py = schemas
   codex_capture.py   compile captured Codex native `sky` traces into macros
-  phone.py           iPhone Mirroring backend (OCR eyes, driver hands)
+  phone.py           iPhone Mirroring backend (OCR eyes, raw-HID hands)
   install.py         `axstream install` — skill + MCP wiring for agents
-  skills/            the packaged Claude Code / Codex skill
+  skills/            the packaged Claude Code / Codex skill (source of truth;
+                     the plugin copy at ../skills is a symlink to it)
 ```
 
 ## License

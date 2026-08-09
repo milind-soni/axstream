@@ -285,3 +285,16 @@ def resolve_name(name_or_path: str, dirs: Optional[list[Path]] = None) -> Option
         if isinstance(mf, MacroFile) and mf.name == name_or_path:
             return path
     return None
+
+
+def computer_for(macro):
+    """The right executor for a macro: a phone-hands adapter when the header
+    declares device:"phone" (mirror windows accept only raw HID), else the
+    standard driver. Imported by replay / gate / mcp so all three agree."""
+    from .driver import DriverComputer
+
+    extra = getattr(macro, "extra", {}) or {}
+    if extra.get("device") == "phone":
+        from .phone import PhoneComputer
+        return PhoneComputer()
+    return DriverComputer()

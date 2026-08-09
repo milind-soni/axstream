@@ -11,8 +11,46 @@ size "w;h", children.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Optional
+
+
+def match_app_name(spoken: str, installed: list[str]) -> Optional[str]:
+    """Resolve a spoken app name against installed app names.
+
+    Ladder: case-insensitive exact -> token-subset in either direction
+    ("apple maps" ⊇ "Maps", "chrome" ⊆ "Google Chrome") -> difflib closest.
+    Returns None when nothing clears the bar — the caller keeps its honest
+    launch failure rather than opening a wrong app.
+    """
+    import difflib
+
+    def tokens(name: str) -> set[str]:
+        return set(re.findall(r"[a-z0-9]+", name.lower()))
+
+    spoken_t = tokens(spoken)
+    if not spoken_t:
+        return None
+    for name in installed:
+        if name.lower() == spoken.lower():
+            return name
+    subset = [n for n in installed
+              if tokens(n) and (tokens(n) <= spoken_t or spoken_t <= tokens(n))]
+    if subset:
+        # strongest overlap wins; shorter name breaks ties ("Maps" over
+        # "Google Maps SDK Helper")
+        def score(name: str) -> tuple:
+            common = len(tokens(name) & spoken_t)
+            return (-common, len(name))
+        return sorted(subset, key=score)[0]
+    close = difflib.get_close_matches(
+        spoken.lower(), [n.lower() for n in installed], n=1, cutoff=0.75)
+    if close:
+        for name in installed:
+            if name.lower() == close[0]:
+                return name
+    return None
 
 INTERACTABLE_ROLES = {
     "AXButton",
