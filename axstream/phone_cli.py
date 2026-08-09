@@ -75,8 +75,13 @@ async def _doctor() -> int:
 
 async def _exec_script(code: str) -> int:
     """Expose each async phone/settle helper as a blocking call bound to one
-    connected computer, then exec the user's script in that namespace."""
-    computer = DriverComputer()
+    connected computer, then exec the user's script in that namespace.
+
+    The computer is a PhoneComputer, NOT a bare DriverComputer: the mirror
+    ignores driver-delivered input at every scope, so the helpers that route
+    through computer methods (press/tap/scroll) only reach the phone via the
+    raw-HID overrides. A bare driver here types into the void."""
+    computer = _phone.PhoneComputer()
     await computer.connect()
     loop = asyncio.get_running_loop()
 

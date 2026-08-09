@@ -37,6 +37,10 @@ class FakeMirror(DriverComputer):
 @pytest.fixture
 def mirror(monkeypatch):
     monkeypatch.setattr(phone, "_app_running", lambda: True)
+    # default world: mirror already holds keyboard focus (NSWorkspace truth),
+    # and activation is observable + free. Tests override per-case.
+    monkeypatch.setattr(phone, "_truly_frontmost", lambda: True)
+    monkeypatch.setattr(phone, "_FRONT_SETTLE_S", 0)
     return FakeMirror()
 
 
@@ -70,10 +74,39 @@ def test_ensure_ready_caches_the_verdict(mirror):
     assert "bring_to_front" not in mirror.calls
 
 
-def test_ensure_ready_fronts_only_when_needed(mirror):
-    other = {**MIRROR, "window_id": 3, "pid": 77, "app_name": "Safari",
-             "z_index": 10}
-    mirror.windows = [MIRROR, other]
+def test_front_activates_even_when_z_order_says_frontmost(mirror, monkeypatch):
+    """The typed-into-nothing regression: the mirror floats top-of-stack by
+    the driver's z-order while the terminal keeps KEYBOARD focus — input is
+    swallowed. z-order must never veto fronting; only the NSWorkspace check
+    (or a recent activation of our own) can skip it."""
+    activations = []
+    monkeypatch.setattr(phone, "_truly_frontmost", lambda: False)
+    monkeypatch.setattr(phone, "_activate_mirror",
+                        lambda: activations.append(1) or True)
+    monkeypatch.setattr(phone, "_FRONT_SETTLE_S", 0)
+    # MIRROR is the only window -> driver z-order calls it frontmost
+    asyncio.run(phone.ensure_ready(mirror))
+    assert len(activations) == 1
+    assert "bring_to_front" not in mirror.calls  # activation sufficed
+
+
+def test_front_trust_window_spares_burst_steps(mirror, monkeypatch):
+    """One activation + settle per burst: steps inside _FRONT_TRUST_S must
+    not re-activate (the settle is the per-step cost worth avoiding)."""
+    activations = []
+    monkeypatch.setattr(phone, "_truly_frontmost", lambda: False)
+    monkeypatch.setattr(phone, "_activate_mirror",
+                        lambda: activations.append(1) or True)
+    monkeypatch.setattr(phone, "_FRONT_SETTLE_S", 0)
+    asyncio.run(phone.ensure_ready(mirror))
+    asyncio.run(phone.ensure_ready(mirror))
+    assert len(activations) == 1
+
+
+def test_front_appkit_unavailable_falls_back_to_driver(mirror, monkeypatch):
+    monkeypatch.setattr(phone, "_truly_frontmost", lambda: None)
+    monkeypatch.setattr(phone, "_activate_mirror", lambda: False)
+    monkeypatch.setattr(phone, "_FRONT_SETTLE_S", 0)
     asyncio.run(phone.ensure_ready(mirror))
     assert mirror.calls.count("bring_to_front") == 1
     assert mirror.target_pid == 55
@@ -86,6 +119,28 @@ def test_ensure_ready_raises_with_relayable_instructions(monkeypatch):
         asyncio.run(phone.ensure_ready(computer))
     assert exc.value.state == "not-running"
     assert computer._phone_ready is None  # a failure poisons the cache
+
+
+class FakePhone(phone.PhoneComputer):
+    """PhoneComputer over the same canned driver responses as FakeMirror."""
+
+    def __init__(self):
+        super().__init__()
+        self.windows = [MIRROR]
+        self.calls: list[str] = []
+
+    tool = FakeMirror.tool
+
+
+def test_phone_computer_fresh_preflight_does_not_recurse(monkeypatch):
+    """The override chain PhoneComputer.window_geometry -> ensure_ready ->
+    state -> _target_mirror must reach the BASE geometry, not re-enter the
+    override — a fresh (uncached) preflight used to recurse forever."""
+    monkeypatch.setattr(phone, "_app_running", lambda: True)
+    monkeypatch.setattr(phone, "_truly_frontmost", lambda: True)
+    p = FakePhone()
+    snap = asyncio.run(p.window_geometry())
+    assert snap is not None and p.target_pid == 55
 
 
 def test_ready_cache_expires(mirror, monkeypatch):

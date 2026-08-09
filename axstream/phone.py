@@ -28,13 +28,25 @@ from .driver import DriverComputer, DriverError, WindowSnapshot
 from . import ocr as _ocr
 
 APP_NAME = "iPhone Mirroring"
+_BUNDLE_ID = "com.apple.ScreenContinuity"
+
+# Activation is ASYNCHRONOUS: the grant + focus transition takes up to ~1.5s,
+# and HID events posted mid-transition are swallowed silently (measured live:
+# cmd+3 at 0.5s after activation never arrived; at 1.5s it opened Spotlight).
+# It CANNOT be confirmed by polling — NSWorkspace focus reads freeze at their
+# first value in a runloop-less process (pumping the runloop does not help),
+# so a "wait until frontmost" loop starves on stale data and refuses falsely.
+# Hence: activate blind, settle the measured time, then TRUST the result for
+# a short window so a burst of steps pays one settle, not one per keystroke.
+_FRONT_SETTLE_S = 1.5
+_FRONT_TRUST_S = 2.0
 
 # A ready verdict stays trusted this long. Without it every phone step pays
-# the full preflight — two list_windows round-trips, a fresh screenshot, a
-# whole-window OCR pass, and a fixed 0.25s post-fronting settle — which
-# dominates an otherwise instant tap. Within the TTL the window's existence
-# and bounds are still re-read live (cheap); only the screenshot+OCR
-# interstitial scan and the re-fronting are skipped.
+# the full preflight — two list_windows round-trips, a fresh screenshot, and
+# a whole-window OCR pass — which dominates an otherwise instant tap. Within
+# the TTL the window's existence and bounds are still re-read live (cheap),
+# and keyboard focus is still re-asserted (an in-process NSWorkspace check;
+# the _FRONT_SETTLE_S cost is paid only when focus actually moved).
 _READY_TTL_S = 2.0
 
 # Distinctive strings on the not-connected interstitials. Any of these visible
@@ -107,22 +119,71 @@ async def state(computer: DriverComputer) -> dict:
             "ocr_available": _ocr.available()}
 
 
-async def _front(computer: DriverComputer, pid: int) -> None:
-    """Front the mirror window — but only when it isn't already frontmost.
-    The 0.25s settle after bring_to_front is the per-step cost worth
-    avoiding; frontmost() is one ~5ms list_windows call."""
-    front_pid, _ = await computer.frontmost()
-    if front_pid == pid:
-        return
+def _truly_frontmost() -> Optional[bool]:
+    """Does the mirror hold KEYBOARD FOCUS, per NSWorkspace — the authority
+    the HID tap obeys. None when AppKit is unavailable (caller falls back to
+    the driver's z-order signal). In-process and effectively free."""
     try:
-        await computer.tool("bring_to_front", pid=pid)
-    except DriverError as e:
-        raise PhoneNotReady(
-            "no-window",
-            f"could not front the iPhone Mirroring window ({e}). Ask the "
-            "user to click the iPhone Mirroring window — if it's gone, "
-            "reconnect the phone in the app.") from e
-    await asyncio.sleep(0.25)
+        from AppKit import NSWorkspace
+    except Exception:
+        return None
+    front = NSWorkspace.sharedWorkspace().frontmostApplication()
+    return bool(front and front.bundleIdentifier() == _BUNDLE_ID)
+
+
+def _activate_mirror() -> bool:
+    """App-level activation (NSApplicationActivateIgnoringOtherApps) — the
+    only reliable way to MOVE keyboard focus. Returns False when AppKit or
+    the app is unavailable so the caller can fall back to the driver."""
+    try:
+        from AppKit import NSRunningApplication
+    except Exception:
+        return False
+    apps = NSRunningApplication.runningApplicationsWithBundleIdentifier_(
+        _BUNDLE_ID)
+    if not apps:
+        return False
+    apps[0].activateWithOptions_(1 << 1)  # NSApplicationActivateIgnoringOtherApps
+    return True
+
+
+async def _front(computer: DriverComputer, pid: int) -> None:
+    """Give the mirror KEYBOARD FOCUS — z-order is not focus. The driver can
+    report the mirror top-of-stack (its window floats high in the stack)
+    while the terminal that launched us keeps keyboard focus, and the mirror
+    silently swallows every HID event that arrives unfocused — the
+    typed-into-nothing failure. So z-order never vetoes fronting here.
+
+    Ladder (each rung's behavior measured live on-device):
+    1. Recently fronted by us -> trust it for _FRONT_TRUST_S: a burst pays
+       one settle, not one per step.
+    2. NSWorkspace says the mirror is focused -> done. This read is truthful
+       at least once per process (fresh at first use; later reads can be
+       stale, which only costs an unnecessary re-activation — the stale
+       value is the PRE-activation state, never a false 'focused').
+    3. Activate app-level (NSRunningApplication) and settle the measured
+       transition time. Activation is granted to this background process
+       but takes up to ~1.5s; there is no reliable way to poll for the flip
+       (see _FRONT_SETTLE_S), so the settle is blind by design.
+    The driver's bring_to_front is only the AppKit-less fallback — it raises
+    the window without reliably moving keyboard focus."""
+    now = _time.monotonic()
+    if now < getattr(computer, "_front_trusted_until", 0):
+        return
+    if _truly_frontmost():
+        computer._front_trusted_until = now + _FRONT_TRUST_S
+        return
+    if not _activate_mirror():
+        try:
+            await computer.tool("bring_to_front", pid=pid)
+        except DriverError as e:
+            raise PhoneNotReady(
+                "no-window",
+                f"could not front the iPhone Mirroring window ({e}). Ask the "
+                "user to click the iPhone Mirroring window — if it's gone, "
+                "reconnect the phone in the app.") from e
+    await asyncio.sleep(_FRONT_SETTLE_S)
+    computer._front_trusted_until = _time.monotonic() + _FRONT_TRUST_S
 
 
 async def ensure_ready(computer: DriverComputer) -> WindowSnapshot:
@@ -193,7 +254,10 @@ async def _target_mirror(computer: DriverComputer,
     if pid is None:
         return None
     computer.target_pid = pid
-    return await computer.window_geometry(fresh_shot=fresh_shot)
+    # the BASE geometry, never the PhoneComputer override — the override
+    # re-enters ensure_ready, and this call sits inside ensure_ready's own
+    # fresh preflight (override -> ensure_ready -> state -> here -> ∞)
+    return await DriverComputer.window_geometry(computer, fresh_shot=fresh_shot)
 
 
 # --- typing: raw keycodes only ---
@@ -344,8 +408,13 @@ def _hid_key(key_names):
         raise ValueError(f"unmappable key {main_keys[-1]!r} in {key_names}")
     for down in (True, False):
         ev = Quartz.CGEventCreateKeyboardEvent(None, code, down)
-        if mods:
-            Quartz.CGEventSetFlags(ev, mods)
+        # Flags describe the modifier state DURING the event: held on the
+        # DOWN, released by the UP. Setting them on the up as well latches
+        # the modifier on the iOS side — a chorded cmd+3 left cmd stuck and
+        # every following letter became a silent shortcut instead of text
+        # (measured live: typing vanished until the chord's up was clean).
+        # Always set explicitly — even 0 — so nothing inherits stale state.
+        Quartz.CGEventSetFlags(ev, mods if down else 0)
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
         _t.sleep(0.03)
 
