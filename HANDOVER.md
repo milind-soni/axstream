@@ -30,9 +30,14 @@ Voice/matcher/burst tier parked at tag v0.2.0 — recover with
 - Skill duplication fixed: skills/axstream/SKILL.md is now a symlink to the
   packaged axstream/skills/axstream/SKILL.md (single source of truth).
 - phone.py: ensure_ready caches a ready verdict for 2s (a burst of taps no
-  longer pays a screenshot+OCR scan + 0.25s settle per step), fronts the
-  window only when it isn't already frontmost, and state() reports
+  longer pays a screenshot+OCR scan per step), and state() reports
   ocr_available so a blind blocked-scan is visible. tests/test_phone.py.
+- phone typing FIXED + live-verified (752e925): keyboard focus via
+  NSWorkspace check + app activation + measured 1.5s settle + 2s trust
+  window (z-order lies; NSWorkspace polling freezes in runloop-less procs
+  — OCR is the only honest verifier); _hid_key no longer latches modifiers
+  (flags on down only); PhoneComputer fresh-preflight recursion fixed;
+  `axstream phone` script helpers now run on PhoneComputer hands.
 
 ### 2. Usability (the 2-minute first success) — REMAINING
 - Docs site: index/quickstart/agents rewritten for the 0.3.x scope; voice
