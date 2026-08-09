@@ -3,6 +3,8 @@
 Wires axstream into every coding agent found on the machine, idempotently:
 
   * Claude Code  skill -> ~/.claude/skills/axstream/SKILL.md
+                 agent -> ~/.claude/agents/computer-use.md (the fast-model
+                 UI subagent the skill delegates multi-step tasks to)
                  MCP   -> `claude mcp add axstream --scope user -- <axstream> mcp`
   * Codex        skill -> ~/.agents/skills/axstream/SKILL.md
                  MCP   -> `codex mcp add axstream -- <axstream> mcp`
@@ -25,6 +27,7 @@ import sys
 from pathlib import Path
 
 SKILL_SRC = Path(__file__).parent / "skills" / "axstream" / "SKILL.md"
+AGENT_SRC = Path(__file__).parent / "agents" / "computer-use.md"
 
 CODEX_TOML_BLOCK = """
 [mcp_servers.axstream]
@@ -54,6 +57,19 @@ def _install_skill(dest_root: Path, label: str) -> str:
     if fresh:
         shutil.copyfile(SKILL_SRC, dest)
     return f"  [ok ] {label} skill: {dest}" + ("" if fresh else " (already current)")
+
+
+def _install_agent(dest_root: Path, label: str) -> str:
+    """Copy the computer-use subagent definition (Claude Code only — Codex
+    has no subagent concept). Same copy-not-symlink rule as the skill."""
+    dest = dest_root / AGENT_SRC.name
+    if not AGENT_SRC.is_file():
+        return f"  [!!] {label} agent: packaged {AGENT_SRC.name} missing ({AGENT_SRC})"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fresh = not dest.exists() or dest.read_text() != AGENT_SRC.read_text()
+    if fresh:
+        shutil.copyfile(AGENT_SRC, dest)
+    return f"  [ok ] {label} agent: {dest}" + ("" if fresh else " (already current)")
 
 
 def _run(cmd: list[str]) -> tuple[int, str]:
@@ -103,6 +119,7 @@ def cmd_install(argv: list[str]) -> int:
     bin_path = _axstream_bin()
     lines = [
         _install_skill(Path("~/.claude/skills").expanduser(), "Claude Code"),
+        _install_agent(Path("~/.claude/agents").expanduser(), "Claude Code"),
         _install_skill(Path("~/.agents/skills").expanduser(), "Codex"),
         _install_claude_mcp(bin_path),
         _install_codex_mcp(bin_path),

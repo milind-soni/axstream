@@ -5,6 +5,25 @@ description: Fast deterministic macOS UI automation via replayable macros. Use B
 
 # axstream — replay UI tasks instead of re-deriving them
 
+## First decision: delegate multi-step UI work to the computer-use subagent
+
+If your harness has a Task/Agent tool and an agent named `computer-use`
+(plugin form: `axstream:computer-use`) is available, DELEGATE any multi-step
+UI task to it instead of driving the UI from the main conversation. It runs
+on a fast model with exactly the tools below, replays a matching macro when
+one exists, drives novel tasks as batched verified actions, saves a macro on
+success, and returns a compact outcome report — so screenshots and OCR dumps
+never enter your context, and your own turns stay fast for the rest of the
+session. It can run in the background while you continue other work.
+
+- Delegate: "open X and do Y then Z", click-through flows, reproduce-a-bug
+  in a running app, verify-something-on-screen, anything worth a macro.
+- Do it yourself (tools below): a single action, or when you must reason
+  about visual state mid-flow.
+- Authorize explicitly: if the task includes an irreversible step (send,
+  pay, delete), name that exact step in the delegation prompt — the agent
+  refuses `risk:"risky"` ops it wasn't explicitly given.
+
 ## Fast primitives (axstream MCP tools, if connected)
 
 When the `axstream` MCP server is available, prefer its primitives over
