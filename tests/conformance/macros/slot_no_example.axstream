@@ -1,0 +1,3 @@
+{"name":"slot_no_example","description":"declared slot with no example — verify has nothing to fill","slots":{"q":{"description":"query"}}}
+{"op":"act","do":"type","text":"{q}"}
+{"op":"assert","target":{"text":"{q}"}}

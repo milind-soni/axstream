@@ -1,0 +1,4 @@
+{"name":"a_totally_different_name","description":"same task shape as note_type","slots":{"title":{"description":"text to type","example":"hello"}}}
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"type","text":"{title}"}
+{"op":"assert","target":{"text":"{title}"}}

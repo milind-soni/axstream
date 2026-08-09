@@ -1,0 +1,3 @@
+{"name":"verified_stale","description":"actions edited after stamping — the stale stamp must not read as verified","verified":{"at":"2026-08-09T00:00:00+00:00","hash":"000000000000","blind_steps":0}}
+{"op":"act","do":"open","target":"Notes"}
+{"op":"assert","target":{"text":"Notes"}}

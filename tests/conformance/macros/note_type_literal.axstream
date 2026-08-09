@@ -1,0 +1,4 @@
+{"name":"note_type_literal","description":"same keystrokes but a LITERAL typed text — a different task family"}
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"type","text":"hello world"}
+{"op":"assert","target":{"text":"hello world"}}

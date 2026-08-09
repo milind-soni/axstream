@@ -1,0 +1,3 @@
+{"name":"phone_device","description":"device:phone header routes replay through the raw-HID phone hands","device":"phone"}
+{"op":"act","do":"open","target":"Timer"}
+{"op":"assert","target":{"text":"Timer"}}

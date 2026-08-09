@@ -1,0 +1,3 @@
+{"name":"risky","description":"carries an irreversible op — the gate must refuse to auto-verify"}
+{"op":"act","do":"click","target":{"x":10,"y":10},"risk":"risky"}
+{"op":"assert","target":{"text":"Done"}}

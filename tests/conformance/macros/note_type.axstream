@@ -1,0 +1,4 @@
+{"name":"note_type","description":"open Notes and type a note","slots":{"title":{"description":"text to type","example":"hello"}}}
+{"op":"act","do":"open","target":"Notes"}
+{"op":"act","do":"type","text":"{title}"}
+{"op":"assert","target":{"text":"{title}"}}

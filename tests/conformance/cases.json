@@ -1,0 +1,296 @@
+{
+  "spec_version": 1,
+  "worlds": {
+    "notes": {
+      "windows": [{"window_id": 7, "pid": 42, "app_name": "Notes", "title": "Notes",
+                   "is_on_screen": true, "z_index": 5,
+                   "bounds": {"x": 100, "y": 50, "width": 800, "height": 600}}],
+      "elements": [{"element_index": 0, "role": "AXWindow", "label": "Notes"},
+                   {"element_index": 12, "role": "AXButton", "label": "New Note",
+                    "frame": {"x": 550, "y": 130, "w": 30, "h": 20}}],
+      "shot": [1600, 1200],
+      "ocr": {"available": false},
+      "patch": {"available": false}
+    },
+    "notes_no_button_ocr": {
+      "windows": [{"window_id": 7, "pid": 42, "app_name": "Notes", "title": "Notes",
+                   "is_on_screen": true, "z_index": 5,
+                   "bounds": {"x": 100, "y": 50, "width": 800, "height": 600}}],
+      "elements": [{"element_index": 0, "role": "AXWindow", "label": "Notes"}],
+      "shot": [1600, 1200],
+      "ocr": {"available": true,
+              "hits": {"New Note": {"x": 1100, "y": 260, "confidence": 0.95, "level": "accurate"}}},
+      "patch": {"available": false}
+    },
+    "notes_grown": {
+      "windows": [{"window_id": 7, "pid": 42, "app_name": "Notes", "title": "Notes",
+                   "is_on_screen": true, "z_index": 5,
+                   "bounds": {"x": 100, "y": 50, "width": 1000, "height": 700}}],
+      "elements": [{"element_index": 0, "role": "AXWindow", "label": "Notes"}],
+      "shot": [2000, 1400],
+      "ocr": {"available": false},
+      "patch": {"available": false}
+    },
+    "notes_too_wide": {
+      "windows": [{"window_id": 7, "pid": 42, "app_name": "Notes", "title": "Notes",
+                   "is_on_screen": true, "z_index": 5,
+                   "bounds": {"x": 100, "y": 50, "width": 1400, "height": 600}}],
+      "elements": [{"element_index": 0, "role": "AXWindow", "label": "Notes"}],
+      "shot": [2800, 1200],
+      "ocr": {"available": false},
+      "patch": {"available": false}
+    },
+    "notes_grown_snap": {
+      "windows": [{"window_id": 7, "pid": 42, "app_name": "Notes", "title": "Notes",
+                   "is_on_screen": true, "z_index": 5,
+                   "bounds": {"x": 100, "y": 50, "width": 1000, "height": 700}}],
+      "elements": [{"element_index": 0, "role": "AXWindow", "label": "Notes"}],
+      "shot": [2000, 1400],
+      "ocr": {"available": true, "hits": {},
+              "all_text": [{"x": 820, "y": 610, "text": "Save", "confidence": 0.9}]},
+      "patch": {"available": false}
+    },
+    "notes_patch": {
+      "windows": [{"window_id": 7, "pid": 42, "app_name": "Notes", "title": "Notes",
+                   "is_on_screen": true, "z_index": 5,
+                   "bounds": {"x": 100, "y": 50, "width": 800, "height": 600}}],
+      "elements": [{"element_index": 0, "role": "AXWindow", "label": "Notes"}],
+      "shot": [1600, 1200],
+      "ocr": {"available": true, "hits": {}},
+      "patch": {"available": true, "hit": {"x": 900, "y": 500, "score": 0.93, "method": "raw"}}
+    }
+  },
+  "cases": [
+
+    {"id": "fmt-parse-shorthand", "kind": "parse",
+     "macro": ["{\"name\":\"m\"}", "{\"op\":\"click\",\"target\":{\"x\":1,\"y\":2}}"],
+     "expect": {"name": "m",
+                "actions": [{"op": "act", "do": "click", "target": {"x": 1, "y": 2}}]}},
+
+    {"id": "fmt-parse-comments-and-blanks", "kind": "parse",
+     "macro": ["{\"name\":\"m\"}", "", "# a comment", "{\"op\":\"act\",\"do\":\"wait\",\"ms\":10}"],
+     "expect": {"name": "m",
+                "actions": [{"op": "act", "do": "wait", "ms": 10}]}},
+
+    {"id": "fmt-parse-headerless-draft", "kind": "parse", "name_hint": "draft",
+     "macro": ["{\"op\":\"act\",\"do\":\"open\",\"target\":\"Notes\"}"],
+     "expect": {"name": "draft",
+                "actions": [{"op": "act", "do": "open", "target": "Notes"}]}},
+
+    {"id": "fmt-parse-unknown-action", "kind": "parse",
+     "macro": ["{\"op\":\"act\",\"do\":\"frobnicate\"}"],
+     "expect": {"error_contains": "unknown action"}},
+
+    {"id": "fmt-parse-no-actions", "kind": "parse",
+     "macro": ["{\"name\":\"m\"}"],
+     "expect": {"error_contains": "no action lines"}},
+
+    {"id": "fmt-parse-bad-json", "kind": "parse",
+     "macro": ["{\"name\":\"m\"}", "not json"],
+     "expect": {"error_contains": "not valid JSON"}},
+
+    {"id": "fmt-fill-basic", "kind": "fill",
+     "macro": ["{\"name\":\"m\",\"slots\":{\"title\":{\"description\":\"t\"}}}",
+               "{\"op\":\"act\",\"do\":\"type\",\"text\":\"{title}\"}",
+               "{\"op\":\"assert\",\"target\":{\"text\":\"{title}\"}}"],
+     "values": {"title": "hi"},
+     "expect": {"used_slots": ["title"],
+                "actions": [{"op": "act", "do": "type", "text": "hi"},
+                            {"op": "assert", "target": {"text": "hi"}}]}},
+
+    {"id": "fmt-fill-missing-slot", "kind": "fill",
+     "macro": ["{\"name\":\"m\",\"slots\":{\"title\":{\"description\":\"t\"}}}",
+               "{\"op\":\"act\",\"do\":\"type\",\"text\":\"{title}\"}"],
+     "values": {},
+     "expect": {"error_contains": "missing slot value(s): title"}},
+
+    {"id": "fmt-fill-undeclared-placeholder-verbatim", "kind": "fill",
+     "macro": ["{\"name\":\"m\"}",
+               "{\"op\":\"act\",\"do\":\"type\",\"text\":\"{not_a_slot}\"}"],
+     "values": {},
+     "expect": {"actions": [{"op": "act", "do": "type", "text": "{not_a_slot}"}]}},
+
+    {"id": "geo-fraction-inside", "kind": "window_fraction",
+     "gx": 500, "gy": 250, "bounds": {"x": 100, "y": 50, "w": 800, "h": 600},
+     "expect": {"win": {"fx": 0.5, "fy": 0.333333, "w": 800, "h": 600}}},
+
+    {"id": "geo-fraction-outside-window", "kind": "window_fraction",
+     "gx": 50, "gy": 250, "bounds": {"x": 100, "y": 50, "w": 800, "h": 600},
+     "expect": {"win": null}},
+
+    {"id": "geo-fraction-degenerate-bounds", "kind": "window_fraction",
+     "gx": 500, "gy": 250, "bounds": {"x": 100, "y": 50, "w": 0, "h": 600},
+     "expect": {"win": null}},
+
+    {"id": "geo-remap-exact", "kind": "remap",
+     "win": {"fx": 0.5, "fy": 0.25, "w": 800, "h": 600}, "live": [800, 600],
+     "expect": {"dx": 400, "dy": 150, "mode": "exact"}},
+
+    {"id": "geo-remap-within-tolerance-is-exact", "kind": "remap",
+     "win": {"fx": 0.5, "fy": 0.25, "w": 800, "h": 600}, "live": [801, 601],
+     "expect": {"dx": 400, "dy": 150, "mode": "exact"}},
+
+    {"id": "geo-remap-anchored-top-left", "kind": "remap",
+     "win": {"fx": 0.1, "fy": 0.1, "w": 800, "h": 600}, "live": [1000, 700],
+     "expect": {"dx": 80, "dy": 60, "mode": "anchored"}},
+
+    {"id": "geo-remap-anchored-bottom-right", "kind": "remap",
+     "win": {"fx": 0.9, "fy": 0.9, "w": 800, "h": 600}, "live": [1000, 700],
+     "expect": {"dx": 920, "dy": 640, "mode": "anchored"}},
+
+    {"id": "geo-remap-refuse-grown-beyond-ratio", "kind": "remap",
+     "win": {"fx": 0.5, "fy": 0.5, "w": 800, "h": 600}, "live": [1400, 600],
+     "expect": {"refuse": true, "reason_contains": "refusing to click blind"}},
+
+    {"id": "geo-remap-refuse-shrunk-beyond-ratio", "kind": "remap",
+     "win": {"fx": 0.5, "fy": 0.5, "w": 800, "h": 600}, "live": [480, 600],
+     "expect": {"refuse": true, "reason_contains": "refusing to click blind"}},
+
+    {"id": "geo-remap-refuse-bad-fragment", "kind": "remap",
+     "win": {"fx": 0.5, "fy": 0.5, "w": 0, "h": 600}, "live": [800, 600],
+     "expect": {"refuse": true, "reason_contains": "unusable win fragment"}},
+
+    {"id": "geo-remap-refuse-remapped-outside", "kind": "remap",
+     "win": {"fx": 1.2, "fy": 0.5, "w": 800, "h": 600}, "live": [520, 600],
+     "expect": {"refuse": true, "reason_contains": "outside"}},
+
+    {"id": "geo-annotate-derives-win", "kind": "annotate",
+     "actions": [{"op": "act", "do": "click", "target": {"x": 500, "y": 250}},
+                 {"op": "act", "do": "click",
+                  "target": {"x": 500, "y": 250, "win": {"fx": 0.9, "fy": 0.9, "w": 640, "h": 480}}},
+                 {"op": "act", "do": "type", "text": "hi"},
+                 {"op": "act", "do": "click", "target": {"x": 50, "y": 250}}],
+     "window": {"x": 100, "y": 50, "w": 800, "h": 600},
+     "expect": {"actions": [
+        {"op": "act", "do": "click",
+         "target": {"x": 500, "y": 250, "win": {"fx": 0.5, "fy": 0.333333, "w": 800, "h": 600}}},
+        {"op": "act", "do": "click",
+         "target": {"x": 500, "y": 250, "win": {"fx": 0.9, "fy": 0.9, "w": 640, "h": 480}}},
+        {"op": "act", "do": "type", "text": "hi"},
+        {"op": "act", "do": "click", "target": {"x": 50, "y": 250}}]}},
+
+    {"id": "lad-ax-element", "kind": "ladder", "world": "notes",
+     "op": {"op": "act", "do": "click", "target": {"ax": {"title": "New Note"}}},
+     "expect": {"via": "ax_element", "delivered": {"element_index": 12}}},
+
+    {"id": "lad-ocr-anchor-when-tree-blind", "kind": "ladder", "world": "notes_no_button_ocr",
+     "op": {"op": "act", "do": "click", "target": {"ax": {"title": "New Note"}}},
+     "expect": {"via": "ocr_anchor", "delivered": {"x": 1100, "y": 260},
+                "note_contains": "label not found in AX tree"}},
+
+    {"id": "lad-refuse-anchor-only-ocr-unavailable", "kind": "ladder", "world": "notes",
+     "op": {"op": "act", "do": "click", "target": {"text": "New Note"}},
+     "expect": {"refuse": true, "reason_contains": "no recorded coordinates"}},
+
+    {"id": "lad-ocr-miss-falls-to-pixels", "kind": "ladder", "world": "notes_no_button_ocr",
+     "op": {"op": "act", "do": "click", "target": {"ax": {"title": "Missing"}, "x": 500, "y": 250}},
+     "expect": {"via": "window_pixel", "delivered": {"x": 800, "y": 400},
+                "note_contains": "OCR did not find"}},
+
+    {"id": "lad-window-pixel-origin-translation", "kind": "ladder", "world": "notes",
+     "op": {"op": "act", "do": "click", "target": {"x": 500, "y": 250}},
+     "expect": {"via": "window_pixel", "delivered": {"x": 800, "y": 400}}},
+
+    {"id": "lad-win-exact", "kind": "ladder", "world": "notes",
+     "op": {"op": "act", "do": "click",
+            "target": {"x": 500, "y": 200, "win": {"fx": 0.5, "fy": 0.25, "w": 800, "h": 600}}},
+     "expect": {"via": "window_pixel", "geometry": "exact", "delivered": {"x": 800, "y": 300}}},
+
+    {"id": "lad-win-anchored-top-left", "kind": "ladder", "world": "notes_grown",
+     "op": {"op": "act", "do": "click",
+            "target": {"x": 180, "y": 110, "win": {"fx": 0.1, "fy": 0.1, "w": 800, "h": 600}}},
+     "expect": {"via": "window_pixel", "geometry": "anchored", "delivered": {"x": 160, "y": 120}}},
+
+    {"id": "lad-win-anchored-bottom-right", "kind": "ladder", "world": "notes_grown",
+     "op": {"op": "act", "do": "click",
+            "target": {"x": 820, "y": 590, "win": {"fx": 0.9, "fy": 0.9, "w": 800, "h": 600}}},
+     "expect": {"via": "window_pixel", "geometry": "anchored", "delivered": {"x": 1840, "y": 1280}}},
+
+    {"id": "lad-win-refuse-resize-beyond-ratio", "kind": "ladder", "world": "notes_too_wide",
+     "op": {"op": "act", "do": "click",
+            "target": {"x": 500, "y": 350, "win": {"fx": 0.5, "fy": 0.5, "w": 800, "h": 600}}},
+     "expect": {"refuse": true, "reason_contains": "refusing to click blind"}},
+
+    {"id": "lad-win-anchored-snaps-to-nearest-text", "kind": "ladder", "world": "notes_grown_snap",
+     "op": {"op": "act", "do": "click",
+            "target": {"x": 500, "y": 350, "win": {"fx": 0.5, "fy": 0.5, "w": 800, "h": 600}}},
+     "expect": {"via": "window_pixel", "geometry": "anchored",
+                "delivered": {"x": 820, "y": 610}, "snapped_to": "Save"}},
+
+    {"id": "lad-patch-anchor-when-ocr-blind", "kind": "ladder", "world": "notes_patch",
+     "op": {"op": "act", "do": "click",
+            "target": {"ax": {"title": "Gear"},
+                       "patch": {"png": "c3R1Yg==", "fx": 0.5625, "fy": 0.4167,
+                                 "sw": 1600, "sh": 1200}}},
+     "expect": {"via": "patch_anchor", "delivered": {"x": 900, "y": 500},
+                "note_contains": "OCR did not find"}},
+
+    {"id": "gate-pred-terminal-assert", "kind": "gate_predicates",
+     "macro_file": "note_type.axstream",
+     "expect": {"terminal_assert": true, "risky_ops": [], "verification_state": "unverified"}},
+
+    {"id": "gate-pred-no-terminal-assert", "kind": "gate_predicates",
+     "macro_file": "no_assert.axstream",
+     "expect": {"terminal_assert": false, "risky_ops": [], "verification_state": "unverified"}},
+
+    {"id": "gate-pred-risky-op", "kind": "gate_predicates",
+     "macro_file": "risky.axstream",
+     "expect": {"terminal_assert": true, "risky_ops": [0], "verification_state": "unverified"}},
+
+    {"id": "gate-pred-verified-stamp", "kind": "gate_predicates",
+     "macro_file": "verified_ok.axstream",
+     "expect": {"terminal_assert": true, "risky_ops": [], "verification_state": "verified"}},
+
+    {"id": "gate-pred-stale-stamp", "kind": "gate_predicates",
+     "macro_file": "verified_stale.axstream",
+     "expect": {"terminal_assert": true, "risky_ops": [], "verification_state": "stale"}},
+
+    {"id": "hash-pin-note-type", "kind": "hash",
+     "macro_file": "note_type.axstream",
+     "expect": {"actions_hash": "f34c62994c14", "signature": "f271b6d68562"}},
+
+    {"id": "hash-pin-literal-type", "kind": "hash",
+     "macro_file": "note_type_literal.axstream",
+     "expect": {"actions_hash": "41942665f064", "signature": "711d56d9e143"}},
+
+    {"id": "hash-pin-verified-fixture", "kind": "hash",
+     "macro_file": "verified_ok.axstream",
+     "expect": {"actions_hash": "9887a09139f1"}},
+
+    {"id": "hash-dedup-same-family", "kind": "signature_pair",
+     "macro_files": ["note_type.axstream", "note_type_renamed.axstream"],
+     "expect": {"same_signature": true}},
+
+    {"id": "hash-dedup-literal-text-distinct", "kind": "signature_pair",
+     "macro_files": ["note_type.axstream", "note_type_literal.axstream"],
+     "expect": {"same_signature": false}},
+
+    {"id": "hash-slot-value", "kind": "slot_value_hash",
+     "value": "hello",
+     "expect": {"hash": "2cf24dba5fb0a30e"}},
+
+    {"id": "verify-reject-no-terminal-assert", "kind": "verify_reject",
+     "macro_file": "no_assert.axstream",
+     "expect": {"reason_contains": "no terminal assert"}},
+
+    {"id": "verify-reject-risky", "kind": "verify_reject",
+     "macro_file": "risky.axstream",
+     "expect": {"reason_contains": "risky"}},
+
+    {"id": "verify-reject-slot-without-example", "kind": "verify_reject",
+     "macro_file": "slot_no_example.axstream",
+     "expect": {"reason_contains": "no header example"}},
+
+    {"id": "verify-reject-captured-slot-reuse", "kind": "verify_reject",
+     "macro_file": "captured_slot.axstream",
+     "expect": {"reason_contains": "fresh slot value"}},
+
+    {"id": "exec-phone-header-picks-phone-hands", "kind": "executor",
+     "macro_file": "phone_device.axstream",
+     "expect": {"executor": "phone"}},
+
+    {"id": "exec-desktop-default-driver", "kind": "executor",
+     "macro_file": "note_type.axstream",
+     "expect": {"executor": "driver"}}
+  ]
+}

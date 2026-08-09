@@ -1,0 +1,3 @@
+{"name":"captured_slot","description":"slot example equals the captured first-run value — verify must demand a fresh one","slots":{"q":{"description":"query","example":"hello"}},"provenance":{"source":"capture","captured_slot_hashes":{"q":"2cf24dba5fb0a30e"}}}
+{"op":"act","do":"type","text":"{q}"}
+{"op":"assert","target":{"text":"{q}"}}
